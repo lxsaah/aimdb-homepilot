@@ -8,12 +8,45 @@ embassy-stm32 = { git = "https://github.com/embassy-rs/embassy", branch = "main"
 embassy-sync = { git = "https://github.com/embassy-rs/embassy", branch = "main", features = ["defmt"] }
 embassy-executor = { git = "https://github.com/embassy-rs/embassy", branch = "main", features = ["arch-cortex-m", "executor-thread", "defmt"] }
 embassy-time = { git = "https://github.com/embassy-rs/embassy", branch = "main", features = ["defmt", "defmt-timestamp-uptime", "tick-hz-32_768"] }
+embassy-net = { git = "https://github.com/embassy-rs/embassy", branch = "main", features = ["defmt", "tcp", "dhcpv4", "medium-ethernet"] }
+
+# aimdb dependencies - disable default features (std) for no_std
+aimdb-core = { version = "0.2", default-features = false, features = ["alloc", "defmt", "serde"] }
+aimdb-embassy-adapter = { version = "0.2", default-features = false, features = ["embassy-runtime"] }
+aimdb-knx-connector = { version = "0.1", default-features = false, features = ["embassy-runtime"] }
+aimdb-mqtt-connector = { version = "0.2", default-features = false, features = ["embassy-runtime"] }
+
+# Serialization
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+heapless = { version = "0.8", features = ["serde"] }
+
+# Memory allocator for no_std
+embedded-alloc = "0.5"
+static_cell = "2.1"
 
 defmt = "0.3.5"
 defmt-rtt = "0.4.0"
 cortex-m = {version = "0.7.7", features = ["critical-section-single-core"]}
 cortex-m-rt = "0.7.3"
 panic-probe = "0.3.1"
+
+[patch.crates-io]
+# Required for KNX connector - bug fixes not yet on crates.io
+knx-pico = { git = "https://github.com/aimdb-dev/knx-pico.git", branch = "master" }
+
+# Required for Embassy-based projects using MQTT
+mountain-mqtt = { git = "https://github.com/aimdb-dev/mountain-mqtt.git", branch = "main" }
+mountain-mqtt-embassy = { git = "https://github.com/aimdb-dev/mountain-mqtt.git", branch = "main" }
+
+# Patch embassy dependencies to use git versions (required for compatibility)
+embassy-executor = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
+embassy-time-driver = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
+embassy-net = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
+embassy-net-driver = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
 
 [profile.release]
 debug = 2
