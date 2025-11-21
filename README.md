@@ -55,6 +55,44 @@ cargo run --release
 
 **Note**: I use `flash.sh` on macOS hosts, this is used as a workaround for DevContainer USB passthrough issues.
 
+### Network Socket Configuration
+
+The Embassy network stack requires sufficient socket resources for concurrent connections. The `StackResources` parameter defines the number of available sockets:
+
+```rust
+static RESOURCES: StaticCell<StackResources<8>> = StaticCell::new();
+```
+
+**Socket allocation breakdown:**
+- DHCP client: 1 socket
+- KNX/IP connector: 1-2 sockets (tunneling + discovery)
+- MQTT connector: 1 socket
+- Additional overhead: 2-3 sockets
+
+**Symptom of insufficient sockets**: The program will hang during initialization when attempting to establish connections.
+
+### Task Pool Configuration
+
+Embassy's executor requires sufficient task slots for spawned tasks. Add the `embassy-task-pool-32` feature to `embassy-executor`:
+
+```toml
+embassy-executor = { 
+    git = "https://github.com/embassy-rs/embassy", 
+    branch = "main", 
+    features = ["arch-cortex-m", "executor-thread", "defmt", "embassy-task-pool-32"] 
+}
+```
+
+**Default task pool size**: 8 tasks (can be insufficient for complex applications)
+
+**Task allocation for this project:**
+- Network stack runner: 1 task
+- KNX connector tasks: 2-3 tasks
+- MQTT connector tasks: 2-3 tasks
+- Consumer monitoring tasks: 2-3 tasks
+
+**Symptom of insufficient task pool**: Runtime panic or failure to spawn tasks during initialization.
+
 ## Console
 
 Control and monitoring console powered by AimDB.

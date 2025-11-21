@@ -12,7 +12,7 @@ embassy-net = { git = "https://github.com/embassy-rs/embassy", branch = "main", 
 
 # aimdb dependencies - disable default features (std) for no_std
 aimdb-core = { version = "0.2", default-features = false, features = ["alloc", "defmt", "serde"] }
-aimdb-embassy-adapter = { version = "0.2", default-features = false, features = ["embassy-runtime"] }
+aimdb-embassy-adapter = { version = "0.2", default-features = false, features = ["embassy-runtime", "embassy-task-pool-32"] }
 aimdb-knx-connector = { version = "0.1", default-features = false, features = ["embassy-runtime"] }
 aimdb-mqtt-connector = { version = "0.2", default-features = false, features = ["embassy-runtime"] }
 
