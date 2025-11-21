@@ -1,0 +1,30 @@
+[package]
+name = "console"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# AimDB core and Tokio adapter
+aimdb-core = { version = "0.2", features = ["std"] }
+aimdb-tokio-adapter = { version = "0.2", features = ["tokio-runtime"] }
+
+# KNX connector
+aimdb-knx-connector = { version = "0.1", features = ["tokio-runtime"] }
+
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Required patch for KNX connector (bug fixes not yet on crates.io)
+[patch.crates-io]
+knx-pico = { git = "https://github.com/aimdb-dev/knx-pico.git", branch = "master" }
