@@ -193,13 +193,13 @@ async fn main(spawner: Spawner) {
             // Subscribe from KNX group address 1/0/7 (switch monitoring)
             .link_from("knx://1/0/7")
             .with_deserializer(|data: &[u8]| {
-                records::switch::knx::deserialize_switch_state_from_knx(data, "1/0/7")
+                records::switch::knx::from_knx(data, "1/0/7")
             })
             .finish()
             // Publish to MQTT as JSON
             .link_to(SwitchState::MQTT_TOPIC)
             .with_serializer(|state: &SwitchState| {
-                records::switch::serde::serialize_state(state)
+                records::switch::json::serialize_state(state)
                     .map_err(|_| aimdb_core::connector::SerializeError::InvalidData)
             })
             .finish();
@@ -216,7 +216,7 @@ async fn main(spawner: Spawner) {
             // Publish to MQTT as JSON
             .link_to(Temperature::MQTT_TOPIC)
             .with_serializer(|temp: &Temperature| {
-                records::temperature::serde::serialize(temp)
+                records::temperature::json::serialize(temp)
                     .map_err(|_| aimdb_core::connector::SerializeError::InvalidData)
             })
             .finish();
@@ -228,12 +228,12 @@ async fn main(spawner: Spawner) {
             .tap(records::switch::monitors::control_monitor)
             // Subscribe from MQTT commands
             .link_from(SwitchControl::MQTT_TOPIC)
-            .with_deserializer(|data: &[u8]| records::switch::serde::deserialize_control(data))
+            .with_deserializer(|data: &[u8]| records::switch::json::deserialize_control(data))
             .finish()
             // Publish to KNX group address 1/0/6 (switch control)
             .link_to("knx://1/0/6")
             .with_serializer(|control: &SwitchControl| {
-                records::switch::knx::serialize_switch_control_to_knx(control)
+                records::switch::knx::to_knx(control)
                     .map_err(|_| aimdb_core::connector::SerializeError::InvalidData)
             })
             .finish();

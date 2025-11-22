@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-# Records module (shared data types) - no_std with embassy support
-records = { path = "../records", default-features = false, features = ["embassy"] }
+# Records module (shared data types) - no_std with KNX and monitor support
+records = { path = "../records", default-features = false, features = ["knx", "monitors"] }
 
 embassy-stm32 = { git = "https://github.com/embassy-rs/embassy", branch = "main", features = ["defmt", "stm32h563zi", "memory-x", "time-driver-any", "exti", "unstable-pac", "low-power"] }
 embassy-sync = { git = "https://github.com/embassy-rs/embassy", branch = "main", features = ["defmt"] }

@@ -1,7 +1,8 @@
 //! KNX Home Automation Record Types
 //!
 //! This module defines the core data structures for KNX home automation
-//! using aimdb. All record types support both `std` and `no_std` environments.
+//! using aimdb. All record types are no_std by default and work in both
+//! embedded and std environments.
 //!
 //! ## Organization
 //!
@@ -19,11 +20,11 @@
 //!
 //! ```ignore
 //! use records::switch::{SwitchState, SwitchControl};
-//! use records::switch::serde::{serialize_state, deserialize_state};
+//! use records::switch::json::{serialize_state, deserialize_state};
 //! use records::temperature::Temperature;
 //!
 //! // Create a switch state
-//! let state = SwitchState::new("1/0/7", true);
+//! let state = SwitchState::new("1/0/7".into(), true);
 //!
 //! // Serialize to JSON
 //! let json = serialize_state(&state)?;
@@ -36,9 +37,8 @@
 //! });
 //! ```
 
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 
-#[cfg(not(feature = "std"))]
 extern crate alloc;
 
 // Re-export serde so derive macros work properly in submodules

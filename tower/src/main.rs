@@ -98,7 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Subscribe from MQTT topic (published by KNX Gateway)
             .link_from(SwitchState::MQTT_TOPIC)
             .with_config("qos", "1")
-            .with_deserializer(|data: &[u8]| records::switch::serde::deserialize_state(data))
+            .with_deserializer(|data: &[u8]| records::switch::json::deserialize_state(data))
             .finish();
     });
 
@@ -111,7 +111,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_config("qos", "1")
             .with_config("retain", "false")
             .with_serializer(|control: &SwitchControl| {
-                records::switch::serde::serialize_control(control)
+                records::switch::json::serialize_control(control)
                     .map_err(|_| aimdb_core::connector::SerializeError::InvalidData)
             })
             .finish();
@@ -124,7 +124,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Subscribe from MQTT topic (published by KNX Gateway)
             .link_from(Temperature::MQTT_TOPIC)
             .with_config("qos", "1")
-            .with_deserializer(|data: &[u8]| records::temperature::serde::deserialize(data))
+            .with_deserializer(|data: &[u8]| records::temperature::json::deserialize(data))
             .finish();
     });
 
