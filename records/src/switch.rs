@@ -91,7 +91,8 @@ pub mod json {
     pub fn deserialize_state(data: &[u8]) -> Result<SwitchState, String> {
         #[cfg(feature = "std")]
         {
-            serde_json::from_slice(data).map_err(|e| alloc::format!("Deserialization failed: {}", e))
+            serde_json::from_slice(data)
+                .map_err(|e| alloc::format!("Deserialization failed: {}", e))
         }
         #[cfg(not(feature = "std"))]
         {
@@ -120,7 +121,8 @@ pub mod json {
     pub fn deserialize_control(data: &[u8]) -> Result<SwitchControl, String> {
         #[cfg(feature = "std")]
         {
-            serde_json::from_slice(data).map_err(|e| alloc::format!("Deserialization failed: {}", e))
+            serde_json::from_slice(data)
+                .map_err(|e| alloc::format!("Deserialization failed: {}", e))
         }
         #[cfg(not(feature = "std"))]
         {

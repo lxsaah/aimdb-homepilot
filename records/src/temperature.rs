@@ -65,7 +65,8 @@ pub mod json {
     pub fn deserialize(data: &[u8]) -> Result<Temperature, String> {
         #[cfg(feature = "std")]
         {
-            serde_json::from_slice(data).map_err(|e| alloc::format!("Deserialization failed: {}", e))
+            serde_json::from_slice(data)
+                .map_err(|e| alloc::format!("Deserialization failed: {}", e))
         }
         #[cfg(not(feature = "std"))]
         {
