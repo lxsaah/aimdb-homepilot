@@ -192,9 +192,7 @@ async fn main(spawner: Spawner) {
             .tap(records::switch::monitors::state_monitor)
             // Subscribe from KNX group address 1/0/7 (switch monitoring)
             .link_from("knx://1/0/7")
-            .with_deserializer(|data: &[u8]| {
-                records::switch::knx::from_knx(data, "1/0/7")
-            })
+            .with_deserializer(|data: &[u8]| records::switch::knx::from_knx(data, "1/0/7"))
             .finish()
             // Publish to MQTT as JSON
             .link_to(SwitchState::MQTT_TOPIC)

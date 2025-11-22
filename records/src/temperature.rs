@@ -22,9 +22,6 @@ pub struct Temperature {
 
     /// Temperature in Celsius
     pub celsius: f32,
-
-    /// Measurement timestamp (milliseconds)
-    pub timestamp: u64,
 }
 
 // ============================================================================
@@ -37,11 +34,7 @@ impl Temperature {
 
     /// Create a new Temperature reading
     pub fn new(address: String, celsius: f32) -> Self {
-        Self {
-            address,
-            celsius,
-            timestamp: 0,
-        }
+        Self { address, celsius }
     }
 }
 
@@ -84,10 +77,7 @@ pub mod monitors {
     /// Logs all incoming temperature readings.
     /// Works with any runtime adapter (Tokio, Embassy, etc.).
     /// Can be used as a tap in aimdb configuration.
-    pub async fn monitor<R: Runtime>(
-        ctx: RuntimeContext<R>,
-        consumer: Consumer<Temperature, R>,
-    ) {
+    pub async fn monitor<R: Runtime>(ctx: RuntimeContext<R>, consumer: Consumer<Temperature, R>) {
         let log = ctx.log();
         log.info("🌡️  Temperature monitor started");
 
@@ -129,7 +119,6 @@ pub mod knx {
         Ok(Temperature {
             address: AllocString::from(group_address),
             celsius,
-            timestamp: 0,
         })
     }
 }

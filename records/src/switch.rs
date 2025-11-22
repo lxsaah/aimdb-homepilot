@@ -25,9 +25,6 @@ pub struct SwitchState {
 
     /// Switch on/off state
     pub is_on: bool,
-
-    /// Timestamp of last update (milliseconds)
-    pub timestamp: u64,
 }
 
 /// KNX switch control command (DPT 1.001)
@@ -41,9 +38,6 @@ pub struct SwitchControl {
 
     /// Desired on/off state
     pub is_on: bool,
-
-    /// Command timestamp (milliseconds)
-    pub timestamp: u64,
 }
 
 // ============================================================================
@@ -56,11 +50,7 @@ impl SwitchState {
 
     /// Create a new SwitchState
     pub fn new(address: String, is_on: bool) -> Self {
-        Self {
-            address,
-            is_on,
-            timestamp: 0,
-        }
+        Self { address, is_on }
     }
 }
 
@@ -70,11 +60,7 @@ impl SwitchControl {
 
     /// Create a new SwitchControl command
     pub fn new(address: String, is_on: bool) -> Self {
-        Self {
-            address,
-            is_on,
-            timestamp: 0,
-        }
+        Self { address, is_on }
     }
 }
 
@@ -203,7 +189,6 @@ pub mod knx {
         Ok(SwitchState {
             address: AllocString::from(group_address),
             is_on,
-            timestamp: 0,
         })
     }
 
