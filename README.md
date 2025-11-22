@@ -4,19 +4,56 @@ AimDB-powered smart home demo using KNX on STM32, MQTT linking and LLM/MCP integ
 
 ## Architecture
 
-This project demonstrates a layered home automation system using an aviation metaphor:
+This project demonstrates a layered home automation system with three main components:
 
-- **ground**: The ground crew executing commands on the hardware (STM32H563ZI-based KNX gateway using Embassy and AimDB)
-- **tower**: The control tower coordinating operations (control and monitoring console for the system)
-- **pilot**: The pilot giving natural language commands (LLM interface via MCP server)
+- **ground**: STM32H563ZI-based KNX/IP gateway that bridges KNX devices to MQTT
+  - Built with Embassy (async embedded Rust)
+  - Monitors KNX bus and publishes state updates to MQTT
+  - Receives MQTT commands and forwards to KNX devices
+  - Runs directly on STM32 hardware
 
-The system enables natural language control of KNX devices through: STM32 hardware → MQTT → AimDB → MCP → LLM.
+- **tower**: Control and monitoring console (PC application)
+  - Connects to MQTT broker to communicate with ground
+  - Exposes Unix domain socket for LLM integration via AimX protocol
+  - Provides bidirectional bridge between MQTT and LLM interface
+  - Built with Tokio async runtime
+
+- **pilot**: LLM interface via aimdb-mcp server
+  - Enables natural language control and monitoring
+  - Connects to tower via Unix socket
+  - Works with Claude Desktop, VS Code Copilot, and other MCP clients
+
+**Data Flow**: KNX devices ↔ ground (STM32) ↔ MQTT ↔ tower (PC) ↔ Unix socket ↔ LLM
+
+## Project Structure
+
+```
+aimdb-homepilot/
+├── ground/          # STM32 KNX gateway (Embassy, no_std)
+├── tower/           # PC console (Tokio, std)
+├── records/         # Shared data types (no_std by default)
+└── README.md
+```
+
+### Records Module
+
+The `records` crate defines shared data types used across all components:
+
+- **SwitchState**: Current state of KNX switches (monitoring)
+- **SwitchControl**: Commands to control KNX switches
+- **Temperature**: Temperature sensor readings
+
+Each record type includes:
+- Serde-compatible data structures (no_std)
+- JSON serialization/deserialization
+- KNX DPT encoding/decoding (for ground)
+- Runtime-agnostic monitors (optional, for debugging)
 
 ## Development
 
 ### Prerequisites
 
-This project uses a DevContainer for a consistent development environment. Simply reuse the DevContainer configuration from:
+This project uses a DevContainer for a consistent development environment. Use the DevContainer configuration from:
 https://github.com/aimdb-dev/aimdb/blob/main/.devcontainer/devcontainer.json
 
 ### Documentation
@@ -26,102 +63,141 @@ https://github.com/aimdb-dev/aimdb/blob/main/docs/aimdb-usage-guide.md
 
 ## Ground (KNX Gateway on STM32)
 
-### Hardware
+The ground component is an embedded KNX/IP gateway that runs on STM32H563ZI hardware.
 
-- **Board**: STM32H563ZI
-- **Framework**: Embassy (async Rust for embedded)
+### Hardware Requirements
 
-### Getting Started
+- **Board**: STM32H563ZI Nucleo board
+- **Network**: Ethernet connection to KNX/IP gateway and MQTT broker
+- **Debug**: Integrated ST-Link debugger (on Nucleo board)
 
-Embassy documentation: https://embassy.dev/book/index.html#_starting_a_new_project
+### Features
 
-Embassy dependencies are sourced directly from git:
+- **KNX/IP Integration**: Connects to KNX bus via IP gateway (tunneling mode)
+- **MQTT Bridge**: Publishes KNX events and receives control commands via MQTT
+- **Async Runtime**: Built with Embassy for efficient embedded async execution
+- **Real-time Monitoring**: Tracks KNX device states and temperature sensors
 
-```toml
-embassy-stm32 = { git = "https://github.com/embassy-rs/embassy", branch = "main", features = ["defmt", "stm32h563zi", "memory-x", "time-driver-any", "exti", "unstable-pac", "low-power"] }
-embassy-sync = { git = "https://github.com/embassy-rs/embassy", branch = "main", features = ["defmt"] }
-embassy-executor = { git = "https://github.com/embassy-rs/embassy", branch = "main", features = ["arch-cortex-m", "executor-thread", "defmt"] }
-embassy-time = { git = "https://github.com/embassy-rs/embassy", branch = "main", features = ["defmt", "defmt-timestamp-uptime", "tick-hz-32_768"] }
+### Configuration
+
+Edit `ground/src/main.rs` to configure network addresses:
+
+```rust
+const KNX_GATEWAY_IP: &str = "192.168.1.19";  // Your KNX/IP gateway
+const MQTT_BROKER_IP: &str = "192.168.1.7";    // Your MQTT broker
 ```
 
 ### Building and Flashing
 
-Build and run:
+Build and flash to STM32:
 
 ```bash
 cd ground
 cargo run --release
 ```
 
-**Note**: I use `flash.sh` on macOS hosts, this is used as a workaround for DevContainer USB passthrough issues.
+The firmware will:
+1. Initialize Ethernet with DHCP
+2. Connect to KNX/IP gateway
+3. Connect to MQTT broker
+4. Start bridging KNX ↔ MQTT
+5. Blink LED to indicate operation
 
-### Network Socket Configuration
+**Note**: On macOS hosts, use `flash.sh` as a workaround for DevContainer USB passthrough issues.
 
-The Embassy network stack requires sufficient socket resources for concurrent connections. The `StackResources` parameter defines the number of available sockets:
+### KNX Device Configuration
 
-```rust
-static RESOURCES: StaticCell<StackResources<8>> = StaticCell::new();
-```
+The gateway is currently configured for:
 
-**Socket allocation breakdown:**
-- DHCP client: 1 socket
-- KNX/IP connector: 1-2 sockets (tunneling + discovery)
-- MQTT connector: 1 socket
-- Additional overhead: 2-3 sockets
+**Monitored Devices** (KNX → MQTT):
+- Group address `1/0/7`: Switch state monitoring (DPT 1.001)
+  - Publishes to MQTT topic: `knx/tv/state`
+- Group address `9/1/0`: Temperature sensor (DPT 9.001)
+  - Publishes to MQTT topic: `knx/temperature/state`
 
-**Symptom of insufficient sockets**: The program will hang during initialization when attempting to establish connections.
+**Controlled Devices** (MQTT → KNX):
+- Group address `1/0/6`: Switch control (DPT 1.001)
+  - Subscribes to MQTT topic: `knx/tv/control`
 
-### Task Pool Configuration
+Modify these in `ground/src/main.rs` to match your KNX installation.
 
-Embassy's executor requires sufficient task slots for spawned tasks. Add the `embassy-task-pool-32` feature to `embassy-executor`:
+### Technical Notes
 
-```toml
-embassy-executor = { 
-    git = "https://github.com/embassy-rs/embassy", 
-    branch = "main", 
-    features = ["arch-cortex-m", "executor-thread", "defmt", "embassy-task-pool-32"] 
-}
-```
+**Network Socket Configuration**: The Embassy network stack requires 8 sockets for:
+- DHCP client (1 socket)
+- KNX/IP connector (1-2 sockets)
+- MQTT connector (1 socket)
+- Protocol overhead (2-3 sockets)
 
-**Default task pool size**: 8 tasks (can be insufficient for complex applications)
+**Task Pool**: Embassy executor uses 32 task slots (via `embassy-task-pool-32` feature) for concurrent async operations.
 
-**Task allocation for this project:**
-- Network stack runner: 1 task
-- KNX connector tasks: 2-3 tasks
-- MQTT connector tasks: 2-3 tasks
-- Consumer monitoring tasks: 2-3 tasks
+**Memory**: 64KB heap allocation for MQTT/KNX protocol buffers and JSON serialization.
 
-**Symptom of insufficient task pool**: Runtime panic or failure to spawn tasks during initialization.
+## Tower (Control Console)
 
-## Tower
+The tower is a PC application that provides the interface between MQTT and LLM clients.
 
-Control and monitoring console powered by AimDB.
+### Features
+
+- **MQTT Integration**: Connects to MQTT broker to communicate with ground
+- **Remote Access**: Exposes Unix domain socket (`/tmp/console.sock`) using AimX protocol
+- **Security**: Configurable read/write permissions for LLM access
+- **Real-time Updates**: Streams KNX device states to connected LLM clients
+
+### Running
+
+Start the console:
 
 ```bash
 cd tower
 cargo run
 ```
 
-## AimDB-MCP Server
+The console will:
+1. Connect to MQTT broker
+2. Create Unix socket at `/tmp/console.sock`
+3. Subscribe to KNX state topics (`knx/tv/state`, `knx/temperature/state`)
+4. Publish control commands to `knx/tv/control`
+5. Accept connections from MCP clients
+
+### Data Flow
+
+```
+LLM Client (Claude/Copilot)
+    ↓ MCP protocol
+aimdb-mcp server
+    ↓ AimX protocol (Unix socket)
+tower (/tmp/console.sock)
+    ↓ MQTT
+MQTT Broker
+    ↓ MQTT
+ground (STM32)
+    ↓ KNX/IP
+KNX devices
+```
+
+## Pilot (LLM Interface via MCP)
+
+The pilot provides natural language control through aimdb-mcp server integration.
 
 ### Installation
 
-Install the MCP server:
+Install the aimdb-mcp server:
 
 ```bash
 cargo install aimdb-mcp
 ```
 
-### Configuration
+### Configuration for VS Code
 
-Add the following to `.vscode/mcp.json`:
+Add to `.vscode/mcp.json`:
 
 ```json
 {
     "servers": {
         "aimdb": {
             "type": "stdio",
-            "command": "/aimdb/aimdb-mcp",
+            "command": "aimdb-mcp",
             "args": [],
             "env": {
                 "RUST_LOG": "info"
@@ -131,49 +207,91 @@ Add the following to `.vscode/mcp.json`:
 }
 ```
 
-Run the MCP server directly from the `mcp.json` file or restart VS Code.
+Restart VS Code or run the MCP server directly from the mcp.json file.
+
+### Usage with GitHub Copilot
+
+Once tower is running and aimdb-mcp is configured, you can:
+
+1. **Discover instances**: "Show me available AimDB instances"
+2. **List records**: "What records are available in the console instance?"
+3. **Read states**: "What's the current temperature?" or "Is the TV on?"
+4. **Control devices**: "Turn on the TV" (sends command to KNX via MQTT)
+5. **Subscribe**: "Subscribe to temperature updates for 50 samples"
+
+## Quick Start
+
+### 1. Start MQTT Broker
+
+Ensure you have an MQTT broker running (e.g., Mosquitto):
+
+```bash
+# On the host or in a container
+mosquitto -v
+```
+
+### 2. Flash and Run Ground (STM32)
+
+```bash
+cd ground
+# Edit src/main.rs to configure KNX_GATEWAY_IP and MQTT_BROKER_IP
+cargo run --release
+```
+
+### 3. Start Tower Console
+
+```bash
+cd tower
+# Optional: export MQTT_BROKER=mqtt://your-broker:1883
+cargo run
+```
+
+### 4. Test with MQTT
+
+Monitor KNX events:
+
+```bash
+mosquitto_sub -h 192.168.1.7 -t 'knx/#' -v
+```
+
+Send control commands:
+
+```bash
+mosquitto_pub -h 192.168.1.7 -t 'knx/tv/control' \
+  -m '{"address":"1/0/6","is_on":true}'
+```
+
+### 5. Connect LLM
+
+Configure aimdb-mcp in VS Code (see Pilot section) and ask natural language questions:
+- "What's the temperature?"
+- "Turn on the TV"
+- "Show me the switch state"
 
 ## Utilities
 
 ### AimDB CLI
 
-The AimDB CLI provides command-line tools for development and administration.
-
-Install:
+Command-line tools for development and debugging:
 
 ```bash
 cargo install aimdb-cli
 ```
 
-#### Available Commands
+**Common commands**:
 
-**Instance Management**
-- `aimdb instance list` - List all running AimDB instances
-- `aimdb instance info <socket>` - Show detailed instance information
-- `aimdb instance ping <socket>` - Test connection to an instance
-
-**Record Management**
-- `aimdb record list <socket>` - List all registered records
-- `aimdb record get <socket> <record>` - Get current value of a record
-- `aimdb record set <socket> <record> <value>` - Set value of a writable record
-
-**Real-time Monitoring**
-- `aimdb watch <record>` - Watch a record in real-time
-  - `-s, --socket <SOCKET>` - Specify socket path (auto-discovery if omitted)
-  - `-c, --count <COUNT>` - Maximum number of events (0 = unlimited)
-  - `-f, --full` - Show full JSON for each event
-
-Example usage:
 ```bash
-# List all instances
+# List running instances
 aimdb instance list
 
-# Watch a temperature record
-aimdb watch server::Temperature
+# Watch temperature in real-time
+aimdb watch records::Temperature
 
-# Get a record value
-aimdb record get /tmp/aimdb.sock server::Temperature
+# Get switch state
+aimdb record get /tmp/console.sock records::SwitchState
 ```
+
+See [aimdb-cli documentation](https://github.com/aimdb-dev/aimdb) for full command reference.
 
 ## License
 
