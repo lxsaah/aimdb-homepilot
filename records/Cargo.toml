@@ -1,0 +1,32 @@
+[package]
+name = "records"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Core serialization support
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+
+# For no_std string support
+heapless = { version = "0.8", default-features = false }
+
+# Optional: for std JSON serialization
+serde_json = { version = "1.0", optional = true }
+
+# Optional: for std logging
+tracing = { version = "0.1", optional = true }
+
+# Optional: for aimdb integration
+aimdb-core = { version = "0.2", optional = true, default-features = false }
+aimdb-tokio-adapter = { version = "0.2", optional = true }
+aimdb-embassy-adapter = { version = "0.2", optional = true, default-features = false }
+aimdb-knx-connector = { version = "0.1", optional = true, default-features = false }
+
+# Optional: for no_std allocator support
+embedded-alloc = { version = "0.6", optional = true }
+
+[features]
+default = ["std"]
+std = ["serde/std", "serde_json", "tracing", "aimdb-core/std", "aimdb-tokio-adapter"]
+embassy = ["aimdb-core/alloc", "aimdb-embassy-adapter", "aimdb-knx-connector", "embedded-alloc"]
+alloc = []
