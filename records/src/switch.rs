@@ -7,7 +7,7 @@
 //! This module is no_std by default and works in both embedded and std environments.
 
 extern crate alloc;
-use alloc::string::String;
+use heapless::String as HeaplessString;
 use serde::{Deserialize, Serialize};
 
 // ============================================================================
@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SwitchState {
     /// KNX group address (e.g., "1/0/7")
-    pub address: String,
+    pub address: HeaplessString<16>,
 
     /// Switch on/off state
     pub is_on: bool,
@@ -34,7 +34,7 @@ pub struct SwitchState {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SwitchControl {
     /// KNX group address to control (e.g., "1/0/6")
-    pub address: String,
+    pub address: HeaplessString<16>,
 
     /// Desired on/off state
     pub is_on: bool,
@@ -46,21 +46,25 @@ pub struct SwitchControl {
 
 impl SwitchState {
     /// MQTT topic for publishing switch state updates
-    pub const MQTT_TOPIC: &'static str = "mqtt://knx/tv/state";
+    pub const MQTT_TOPIC: &'static str = "knx/tv/state";
 
     /// Create a new SwitchState
-    pub fn new(address: String, is_on: bool) -> Self {
-        Self { address, is_on }
+    pub fn new(address: &str, is_on: bool) -> Self {
+        let mut addr = HeaplessString::new();
+        let _ = addr.push_str(address);
+        Self { address: addr, is_on }
     }
 }
 
 impl SwitchControl {
     /// MQTT topic for receiving switch control commands
-    pub const MQTT_TOPIC: &'static str = "mqtt://knx/tv/control";
+    pub const MQTT_TOPIC: &'static str = "knx/tv/control";
 
     /// Create a new SwitchControl command
-    pub fn new(address: String, is_on: bool) -> Self {
-        Self { address, is_on }
+    pub fn new(address: &str, is_on: bool) -> Self {
+        let mut addr = HeaplessString::new();
+        let _ = addr.push_str(address);
+        Self { address: addr, is_on }
     }
 }
 
@@ -71,6 +75,7 @@ impl SwitchControl {
 pub mod json {
     use super::*;
     use alloc::vec::Vec;
+    use alloc::string::String;
 
     /// Serialize SwitchState to JSON
     pub fn serialize_state(state: &SwitchState) -> Result<Vec<u8>, String> {
@@ -202,7 +207,8 @@ pub mod monitors {
 #[cfg(feature = "knx")]
 pub mod knx {
     use super::*;
-    use alloc::{string::String as AllocString, vec::Vec};
+    use alloc::vec::Vec;
+    use alloc::string::String;
 
     /// Deserialize SwitchState from KNX DPT 1.001 (boolean)
     ///
@@ -215,9 +221,12 @@ pub mod knx {
         use aimdb_knx_connector::dpt::{Dpt1, DptDecode};
 
         let is_on = Dpt1::Switch.decode(data).unwrap_or(false);
+        
+        let mut address = HeaplessString::<16>::new();
+        address.push_str(group_address).map_err(|_| String::from("Address too long"))?;
 
         Ok(SwitchState {
-            address: AllocString::from(group_address),
+            address,
             is_on,
         })
     }

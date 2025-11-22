@@ -65,7 +65,7 @@ async fn main(spawner: Spawner) {
     // Initialize heap for the allocator
     {
         use core::mem::MaybeUninit;
-        const HEAP_SIZE: usize = 32768; // 32KB heap
+        const HEAP_SIZE: usize = 65536; // 64KB heap (increased from 32KB)
         static mut HEAP: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
         unsafe {
             let heap_ptr = core::ptr::addr_of_mut!(HEAP);
@@ -195,7 +195,7 @@ async fn main(spawner: Spawner) {
             .with_deserializer(|data: &[u8]| records::switch::knx::from_knx(data, "1/0/7"))
             .finish()
             // Publish to MQTT as JSON
-            .link_to(SwitchState::MQTT_TOPIC)
+            .link_to(&alloc::format!("mqtt://{}", SwitchState::MQTT_TOPIC))
             .with_serializer(|state: &SwitchState| {
                 records::switch::json::serialize_state(state)
                     .map_err(|_| aimdb_core::connector::SerializeError::InvalidData)
@@ -212,7 +212,7 @@ async fn main(spawner: Spawner) {
             .with_deserializer(|data: &[u8]| records::temperature::knx::from_knx(data, "9/1/0"))
             .finish()
             // Publish to MQTT as JSON
-            .link_to(Temperature::MQTT_TOPIC)
+            .link_to(&alloc::format!("mqtt://{}", Temperature::MQTT_TOPIC))
             .with_serializer(|temp: &Temperature| {
                 records::temperature::json::serialize(temp)
                     .map_err(|_| aimdb_core::connector::SerializeError::InvalidData)
@@ -225,7 +225,7 @@ async fn main(spawner: Spawner) {
         reg.buffer_sized::<8, 2>(EmbassyBufferType::SingleLatest)
             .tap(records::switch::monitors::control_monitor)
             // Subscribe from MQTT commands
-            .link_from(SwitchControl::MQTT_TOPIC)
+            .link_from(&alloc::format!("mqtt://{}", SwitchControl::MQTT_TOPIC))
             .with_deserializer(|data: &[u8]| records::switch::json::deserialize_control(data))
             .finish()
             // Publish to KNX group address 1/0/6 (switch control)

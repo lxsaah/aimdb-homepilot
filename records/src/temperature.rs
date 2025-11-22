@@ -5,7 +5,7 @@
 //! This module is no_std by default and works in both embedded and std environments.
 
 extern crate alloc;
-use alloc::string::String;
+use heapless::String as HeaplessString;
 use serde::{Deserialize, Serialize};
 
 // ============================================================================
@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Temperature {
     /// KNX group address (e.g., "9/1/0")
-    pub address: String,
+    pub address: HeaplessString<16>,
 
     /// Temperature in Celsius
     pub celsius: f32,
@@ -30,11 +30,13 @@ pub struct Temperature {
 
 impl Temperature {
     /// MQTT topic for publishing temperature readings
-    pub const MQTT_TOPIC: &'static str = "mqtt://knx/temperature/state";
+    pub const MQTT_TOPIC: &'static str = "knx/temperature/state";
 
     /// Create a new Temperature reading
-    pub fn new(address: String, celsius: f32) -> Self {
-        Self { address, celsius }
+    pub fn new(address: &str, celsius: f32) -> Self {
+        let mut addr = HeaplessString::new();
+        let _ = addr.push_str(address);
+        Self { address: addr, celsius }
     }
 }
 
@@ -45,6 +47,7 @@ impl Temperature {
 pub mod json {
     use super::*;
     use alloc::vec::Vec;
+    use alloc::string::String;
 
     /// Serialize Temperature to JSON
     pub fn serialize(temp: &Temperature) -> Result<Vec<u8>, String> {
@@ -117,7 +120,7 @@ pub mod monitors {
 #[cfg(feature = "knx")]
 pub mod knx {
     use super::*;
-    use alloc::string::String as AllocString;
+    use alloc::string::String;
 
     /// Deserialize Temperature from KNX DPT 9.001 (2-byte float)
     ///
@@ -130,9 +133,12 @@ pub mod knx {
         use aimdb_knx_connector::dpt::{Dpt9, DptDecode};
 
         let celsius = Dpt9::Temperature.decode(data).unwrap_or(0.0);
+        
+        let mut address = HeaplessString::<16>::new();
+        address.push_str(group_address).map_err(|_| String::from("Address too long"))?;
 
         Ok(Temperature {
-            address: AllocString::from(group_address),
+            address,
             celsius,
         })
     }

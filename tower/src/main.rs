@@ -96,7 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         reg.buffer(BufferCfg::SingleLatest)
             .with_serialization()
             // Subscribe from MQTT topic (published by KNX Gateway)
-            .link_from(SwitchState::MQTT_TOPIC)
+            .link_from(&format!("mqtt://{}", SwitchState::MQTT_TOPIC))
             .with_config("qos", "1")
             .with_deserializer(|data: &[u8]| records::switch::json::deserialize_state(data))
             .finish();
@@ -107,7 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         reg.buffer(BufferCfg::SpmcRing { capacity: 50 })
             .with_serialization()
             // Publish switch control commands to MQTT (consumed by KNX Gateway)
-            .link_to(SwitchControl::MQTT_TOPIC)
+            .link_to(&format!("mqtt://{}", SwitchControl::MQTT_TOPIC))
             .with_config("qos", "1")
             .with_config("retain", "false")
             .with_serializer(|control: &SwitchControl| {
@@ -122,7 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         reg.buffer(BufferCfg::SingleLatest)
             .with_serialization()
             // Subscribe from MQTT topic (published by KNX Gateway)
-            .link_from(Temperature::MQTT_TOPIC)
+            .link_from(&format!("mqtt://{}", Temperature::MQTT_TOPIC))
             .with_config("qos", "1")
             .with_deserializer(|data: &[u8]| records::temperature::json::deserialize(data))
             .finish();
