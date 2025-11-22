@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# Records module (shared data types) - no features needed, uses monitors for logging
-records = { path = "../records", features = ["monitors"] }
+# Records module (shared data types) - use std feature for robust JSON handling
+records = { path = "../records", features = ["monitors", "std"] }
 
 # AimDB core and Tokio adapter
 aimdb-core = { version = "0.2", features = ["std"] }

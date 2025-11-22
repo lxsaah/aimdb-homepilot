@@ -48,17 +48,31 @@ pub mod json {
 
     /// Serialize Temperature to JSON
     pub fn serialize(temp: &Temperature) -> Result<Vec<u8>, String> {
-        let mut buf = [0u8; 128];
-        serde_json_core::to_slice(temp, &mut buf)
-            .map(|len| buf[..len].to_vec())
-            .map_err(|_| String::from("Serialization buffer too small"))
+        #[cfg(feature = "std")]
+        {
+            serde_json::to_vec(temp).map_err(|e| alloc::format!("Serialization failed: {}", e))
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            let mut buf = [0u8; 128];
+            serde_json_core::to_slice(temp, &mut buf)
+                .map(|len| buf[..len].to_vec())
+                .map_err(|_| String::from("Serialization buffer too small"))
+        }
     }
 
     /// Deserialize Temperature from JSON
     pub fn deserialize(data: &[u8]) -> Result<Temperature, String> {
-        serde_json_core::from_slice(data)
-            .map(|(temp, _)| temp)
-            .map_err(|_| String::from("Deserialization failed"))
+        #[cfg(feature = "std")]
+        {
+            serde_json::from_slice(data).map_err(|e| alloc::format!("Deserialization failed: {}", e))
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            serde_json_core::from_slice(data)
+                .map(|(temp, _)| temp)
+                .map_err(|_| String::from("Deserialization failed"))
+        }
     }
 }
 

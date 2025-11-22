@@ -46,7 +46,7 @@ pub struct SwitchControl {
 
 impl SwitchState {
     /// MQTT topic for publishing switch state updates
-    pub const MQTT_TOPIC: &'static str = "mqtt://knx/lights/state";
+    pub const MQTT_TOPIC: &'static str = "mqtt://knx/tv/state";
 
     /// Create a new SwitchState
     pub fn new(address: String, is_on: bool) -> Self {
@@ -56,7 +56,7 @@ impl SwitchState {
 
 impl SwitchControl {
     /// MQTT topic for receiving switch control commands
-    pub const MQTT_TOPIC: &'static str = "mqtt://knx/lights/control";
+    pub const MQTT_TOPIC: &'static str = "mqtt://knx/tv/control";
 
     /// Create a new SwitchControl command
     pub fn new(address: String, is_on: bool) -> Self {
@@ -74,32 +74,60 @@ pub mod json {
 
     /// Serialize SwitchState to JSON
     pub fn serialize_state(state: &SwitchState) -> Result<Vec<u8>, String> {
-        let mut buf = [0u8; 128];
-        serde_json_core::to_slice(state, &mut buf)
-            .map(|len| buf[..len].to_vec())
-            .map_err(|_| String::from("Serialization buffer too small"))
+        #[cfg(feature = "std")]
+        {
+            serde_json::to_vec(state).map_err(|e| alloc::format!("Serialization failed: {}", e))
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            let mut buf = [0u8; 128];
+            serde_json_core::to_slice(state, &mut buf)
+                .map(|len| buf[..len].to_vec())
+                .map_err(|_| String::from("Serialization buffer too small"))
+        }
     }
 
     /// Deserialize SwitchState from JSON
     pub fn deserialize_state(data: &[u8]) -> Result<SwitchState, String> {
-        serde_json_core::from_slice(data)
-            .map(|(state, _)| state)
-            .map_err(|_| String::from("Deserialization failed"))
+        #[cfg(feature = "std")]
+        {
+            serde_json::from_slice(data).map_err(|e| alloc::format!("Deserialization failed: {}", e))
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            serde_json_core::from_slice(data)
+                .map(|(state, _)| state)
+                .map_err(|_| String::from("Deserialization failed"))
+        }
     }
 
     /// Serialize SwitchControl to JSON
     pub fn serialize_control(control: &SwitchControl) -> Result<Vec<u8>, String> {
-        let mut buf = [0u8; 128];
-        serde_json_core::to_slice(control, &mut buf)
-            .map(|len| buf[..len].to_vec())
-            .map_err(|_| String::from("Serialization buffer too small"))
+        #[cfg(feature = "std")]
+        {
+            serde_json::to_vec(control).map_err(|e| alloc::format!("Serialization failed: {}", e))
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            let mut buf = [0u8; 128];
+            serde_json_core::to_slice(control, &mut buf)
+                .map(|len| buf[..len].to_vec())
+                .map_err(|_| String::from("Serialization buffer too small"))
+        }
     }
 
     /// Deserialize SwitchControl from JSON
     pub fn deserialize_control(data: &[u8]) -> Result<SwitchControl, String> {
-        serde_json_core::from_slice(data)
-            .map(|(control, _)| control)
-            .map_err(|_| String::from("Deserialization failed"))
+        #[cfg(feature = "std")]
+        {
+            serde_json::from_slice(data).map_err(|e| alloc::format!("Deserialization failed: {}", e))
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            serde_json_core::from_slice(data)
+                .map(|(control, _)| control)
+                .map_err(|_| String::from("Deserialization failed"))
+        }
     }
 }
 

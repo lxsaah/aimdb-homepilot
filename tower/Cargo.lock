@@ -423,6 +423,7 @@ dependencies = [
  "heapless",
  "serde",
  "serde-json-core",
+ "serde_json",
 ]
 
 [[package]]
