@@ -721,6 +721,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "ground"
+version = "0.1.0"
+dependencies = [
+ "aimdb-core",
+ "aimdb-embassy-adapter",
+ "aimdb-knx-connector",
+ "aimdb-mqtt-connector",
+ "cortex-m",
+ "cortex-m-rt",
+ "defmt 0.3.100",
+ "defmt-rtt",
+ "embassy-executor",
+ "embassy-net",
+ "embassy-stm32",
+ "embassy-sync",
+ "embassy-time",
+ "embedded-alloc 0.5.1",
+ "heapless 0.8.0",
+ "panic-probe",
+ "records",
+ "serde",
+ "serde_json",
+ "static_cell",
+]
+
+[[package]]
 name = "hash32"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -762,32 +788,6 @@ name = "itoa"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
-
-[[package]]
-name = "knx-gateway"
-version = "0.1.0"
-dependencies = [
- "aimdb-core",
- "aimdb-embassy-adapter",
- "aimdb-knx-connector",
- "aimdb-mqtt-connector",
- "cortex-m",
- "cortex-m-rt",
- "defmt 0.3.100",
- "defmt-rtt",
- "embassy-executor",
- "embassy-net",
- "embassy-stm32",
- "embassy-sync",
- "embassy-time",
- "embedded-alloc 0.5.1",
- "heapless 0.8.0",
- "panic-probe",
- "records",
- "serde",
- "serde_json",
- "static_cell",
-]
 
 [[package]]
 name = "knx-pico"

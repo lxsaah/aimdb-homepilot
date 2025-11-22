@@ -4,11 +4,11 @@ AimDB-powered smart home demo using KNX on STM32, MQTT linking and LLM/MCP integ
 
 ## Architecture
 
-This project demonstrates a layered home automation system:
+This project demonstrates a layered home automation system using an aviation metaphor:
 
-- **knx-gateway**: STM32H563ZI-based KNX gateway using Embassy and AimDB
-- **console**: Control and monitoring console for the system
-- **aimdb-mcp-server**: MCP server providing LLM integration via the Model Context Protocol
+- **ground**: The ground crew executing commands on the hardware (STM32H563ZI-based KNX gateway using Embassy and AimDB)
+- **tower**: The control tower coordinating operations (control and monitoring console for the system)
+- **pilot**: The pilot giving natural language commands (LLM interface via MCP server)
 
 The system enables natural language control of KNX devices through: STM32 hardware → MQTT → AimDB → MCP → LLM.
 
@@ -24,7 +24,7 @@ https://github.com/aimdb-dev/aimdb/blob/main/.devcontainer/devcontainer.json
 For detailed information on using AimDB, refer to the official usage guide:
 https://github.com/aimdb-dev/aimdb/blob/main/docs/aimdb-usage-guide.md
 
-## KNX Gateway (STM32)
+## Ground (KNX Gateway on STM32)
 
 ### Hardware
 
@@ -49,7 +49,7 @@ embassy-time = { git = "https://github.com/embassy-rs/embassy", branch = "main",
 Build and run:
 
 ```bash
-cd knx-gateway
+cd ground
 cargo run --release
 ```
 
@@ -93,12 +93,12 @@ embassy-executor = {
 
 **Symptom of insufficient task pool**: Runtime panic or failure to spawn tasks during initialization.
 
-## Console
+## Tower
 
 Control and monitoring console powered by AimDB.
 
 ```bash
-cd console
+cd tower
 cargo run
 ```
 

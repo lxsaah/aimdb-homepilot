@@ -2,8 +2,8 @@
 
 This project focuses on home automation with LLM integration. The architecture consists of:
 
-- **knx-gateway**: An STM32-based KNX gateway implementation built on aimdb, providing hardware-level integration with KNX home automation systems
-- **aimdb-mcp-server**: Runs on a PC and connects to the KNX gateway via MQTT, serving as the central coordination layer
+- **ground**: An STM32-based KNX gateway implementation built on aimdb, providing hardware-level integration with KNX home automation systems
+- **tower**: Control and monitoring console that runs on a PC and connects to the ground via MQTT, serving as the central coordination layer
 - **LLM Interface**: Exposed through the aimdb-mcp crate, enabling natural language interaction with the home automation system
 
 The system allows LLM-powered control and monitoring of KNX devices through a layered architecture: STM32 hardware → MQTT → aimdb → MCP → LLM.

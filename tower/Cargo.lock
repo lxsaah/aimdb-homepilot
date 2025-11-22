@@ -136,22 +136,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
-name = "console"
-version = "0.1.0"
-dependencies = [
- "aimdb-core",
- "aimdb-mqtt-connector",
- "aimdb-tokio-adapter",
- "anyhow",
- "records",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -795,6 +779,22 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "tokio",
+]
+
+[[package]]
+name = "tower"
+version = "0.1.0"
+dependencies = [
+ "aimdb-core",
+ "aimdb-mqtt-connector",
+ "aimdb-tokio-adapter",
+ "anyhow",
+ "records",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
