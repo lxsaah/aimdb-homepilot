@@ -3,7 +3,6 @@
 //! Contains all switch-related data structures and utilities:
 //! - SwitchState: Current state of a KNX switch
 //! - SwitchControl: Control commands for switches
-//! - SwitchEvent: Button press/release events
 
 #[cfg(feature = "std")]
 use std::string::String;
@@ -65,28 +64,6 @@ pub struct SwitchControl {
     pub timestamp: u64,
 }
 
-/// KNX switch event (DPT 1.001 - button press)
-/// 
-/// Represents a button press/release event.
-/// Used for tracking user interactions with physical switches.
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq))]
-#[cfg_attr(feature = "std", derive(crate::serde::Serialize, crate::serde::Deserialize))]
-#[cfg_attr(not(feature = "std"), derive(crate::serde::Serialize, crate::serde::Deserialize))]
-pub struct SwitchEvent {
-    /// KNX group address (e.g., "1/0/7")
-    #[cfg(feature = "std")]
-    pub address: String,
-    #[cfg(not(feature = "std"))]
-    pub address: HeaplessString<16>,
-    
-    /// Button pressed (true) or released (false)
-    pub pressed: bool,
-    
-    /// Event timestamp (milliseconds)
-    pub timestamp: u64,
-}
-
 // ============================================================================
 // CONSTRUCTORS (std only)
 // ============================================================================
@@ -125,23 +102,6 @@ impl SwitchControl {
     }
 }
 
-impl SwitchEvent {
-    /// MQTT topic for publishing switch events
-    pub const MQTT_TOPIC: &'static str = "mqtt://knx/lights/event";
-}
-
-#[cfg(feature = "std")]
-impl SwitchEvent {
-    /// Create a new SwitchEvent
-    pub fn new(address: impl Into<String>, pressed: bool) -> Self {
-        Self {
-            address: address.into(),
-            pressed,
-            timestamp: 0,
-        }
-    }
-}
-
 // ============================================================================
 // SERIALIZATION - STD
 // ============================================================================
@@ -172,16 +132,7 @@ pub mod serde {
             .map_err(|e| format!("Failed to deserialize SwitchControl: {}", e))
     }
     
-    /// Serialize SwitchEvent to JSON
-    pub fn serialize_event(event: &SwitchEvent) -> Result<Vec<u8>, serde_json::Error> {
-        serde_json::to_vec(event)
-    }
-    
-    /// Deserialize SwitchEvent from JSON
-    pub fn deserialize_event(data: &[u8]) -> Result<SwitchEvent, String> {
-        serde_json::from_slice(data)
-            .map_err(|e| format!("Failed to deserialize SwitchEvent: {}", e))
-    }
+
 }
 
 // ============================================================================
@@ -291,56 +242,6 @@ pub mod serde {
             timestamp,
         })
     }
-    
-    /// Serialize SwitchEvent to JSON (manual formatting)
-    pub fn serialize_event(event: &SwitchEvent) -> Result<Vec<u8>, alloc::string::String> {
-        let json = format!(
-            r#"{{"address":"{}","pressed":{},"timestamp":{}}}"#,
-            event.address.as_str(),
-            event.pressed,
-            event.timestamp
-        );
-        Ok(json.into_bytes())
-    }
-    
-    /// Deserialize SwitchEvent from JSON (manual parsing)
-    pub fn deserialize_event(data: &[u8]) -> Result<SwitchEvent, alloc::string::String> {
-        let json_str = core::str::from_utf8(data)
-            .map_err(|_| alloc::string::String::from("Invalid UTF-8"))?;
-        
-        let mut address = HeaplessString::<16>::new();
-        let mut pressed = false;
-        let mut timestamp = 0u64;
-        
-        for pair in json_str.trim_matches(|c| c == '{' || c == '}').split(',') {
-            let parts: alloc::vec::Vec<&str> = pair.split(':').collect();
-            if parts.len() != 2 {
-                continue;
-            }
-            let key = parts[0].trim().trim_matches('"');
-            let value = parts[1].trim();
-            
-            match key {
-                "address" => {
-                    let addr = value.trim_matches('"');
-                    let _ = address.push_str(addr);
-                }
-                "pressed" => {
-                    pressed = value == "true";
-                }
-                "timestamp" => {
-                    timestamp = value.parse().unwrap_or(0);
-                }
-                _ => {}
-            }
-        }
-        
-        Ok(SwitchEvent {
-            address,
-            pressed,
-            timestamp,
-        })
-    }
 }
 
 // ============================================================================
@@ -401,28 +302,7 @@ pub mod monitors {
         }
     }
     
-    /// Monitor for SwitchEvent changes
-    /// 
-    /// Logs all incoming switch events (button presses).
-    pub async fn event_monitor(
-        _ctx: RuntimeContext<TokioAdapter>,
-        consumer: Consumer<SwitchEvent, TokioAdapter>,
-    ) {
-        info!("🔘 Switch event monitor started");
-        
-        let Ok(mut reader) = consumer.subscribe() else {
-            error!("Failed to subscribe to SwitchEvent buffer");
-            return;
-        };
-        
-        while let Ok(event) = reader.recv().await {
-            info!(
-                "🔘 Switch event: {} = {}",
-                event.address,
-                if event.pressed { "PRESSED" } else { "RELEASED" }
-            );
-        }
-    }
+
 }
 
 // ============================================================================

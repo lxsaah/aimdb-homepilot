@@ -12,7 +12,7 @@
 //!
 //! ## Modules
 //!
-//! - [`switch`]: Switch-related records (SwitchState, SwitchControl, SwitchEvent)
+//! - [`switch`]: Switch-related records (SwitchState, SwitchControl)
 //! - [`temperature`]: Temperature sensor records
 //!
 //! ## Example Usage
@@ -49,5 +49,5 @@ pub mod switch;
 pub mod temperature;
 
 // Re-export commonly used types for convenience
-pub use switch::{SwitchState, SwitchControl, SwitchEvent};
+pub use switch::{SwitchState, SwitchControl};
 pub use temperature::Temperature;
