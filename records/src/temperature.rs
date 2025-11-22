@@ -19,22 +19,28 @@ use alloc::{format, vec::Vec};
 // ============================================================================
 
 /// KNX temperature sensor reading (DPT 9.001 - 2-byte float)
-/// 
+///
 /// Represents a temperature measurement from a KNX sensor.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "std", derive(PartialEq))]
-#[cfg_attr(feature = "std", derive(crate::serde::Serialize, crate::serde::Deserialize))]
-#[cfg_attr(not(feature = "std"), derive(crate::serde::Serialize, crate::serde::Deserialize))]
+#[cfg_attr(
+    feature = "std",
+    derive(crate::serde::Serialize, crate::serde::Deserialize)
+)]
+#[cfg_attr(
+    not(feature = "std"),
+    derive(crate::serde::Serialize, crate::serde::Deserialize)
+)]
 pub struct Temperature {
     /// KNX group address (e.g., "9/1/0")
     #[cfg(feature = "std")]
     pub address: String,
     #[cfg(not(feature = "std"))]
     pub address: HeaplessString<16>,
-    
+
     /// Temperature in Celsius
     pub celsius: f32,
-    
+
     /// Measurement timestamp (milliseconds)
     pub timestamp: u64,
 }
@@ -67,12 +73,12 @@ impl Temperature {
 #[cfg(feature = "std")]
 pub mod serde {
     use super::*;
-    
+
     /// Serialize Temperature to JSON
     pub fn serialize(temp: &Temperature) -> Result<Vec<u8>, serde_json::Error> {
         serde_json::to_vec(temp)
     }
-    
+
     /// Deserialize Temperature from JSON
     pub fn deserialize(data: &[u8]) -> Result<Temperature, String> {
         serde_json::from_slice(data)
@@ -87,7 +93,7 @@ pub mod serde {
 #[cfg(not(feature = "std"))]
 pub mod serde {
     use super::*;
-    
+
     /// Serialize Temperature to JSON (manual formatting)
     pub fn serialize(temp: &Temperature) -> Result<Vec<u8>, alloc::string::String> {
         let json = format!(
@@ -98,16 +104,16 @@ pub mod serde {
         );
         Ok(json.into_bytes())
     }
-    
+
     /// Deserialize Temperature from JSON (manual parsing)
     pub fn deserialize(data: &[u8]) -> Result<Temperature, alloc::string::String> {
-        let json_str = core::str::from_utf8(data)
-            .map_err(|_| alloc::string::String::from("Invalid UTF-8"))?;
-        
+        let json_str =
+            core::str::from_utf8(data).map_err(|_| alloc::string::String::from("Invalid UTF-8"))?;
+
         let mut address = HeaplessString::<16>::new();
         let mut celsius = 0.0f32;
         let mut timestamp = 0u64;
-        
+
         for pair in json_str.trim_matches(|c| c == '{' || c == '}').split(',') {
             let parts: alloc::vec::Vec<&str> = pair.split(':').collect();
             if parts.len() != 2 {
@@ -115,7 +121,7 @@ pub mod serde {
             }
             let key = parts[0].trim().trim_matches('"');
             let value = parts[1].trim();
-            
+
             match key {
                 "address" => {
                     let addr = value.trim_matches('"');
@@ -130,7 +136,7 @@ pub mod serde {
                 _ => {}
             }
         }
-        
+
         Ok(Temperature {
             address,
             celsius,
@@ -146,12 +152,12 @@ pub mod serde {
 #[cfg(feature = "std")]
 pub mod monitors {
     use super::*;
-    use tracing::{info, error};
-    use aimdb_tokio_adapter::TokioAdapter;
     use aimdb_core::{Consumer, RuntimeContext};
-    
+    use aimdb_tokio_adapter::TokioAdapter;
+    use tracing::{error, info};
+
     /// Monitor for Temperature changes
-    /// 
+    ///
     /// Logs all incoming temperature readings to the console.
     /// Can be used as a tap in aimdb configuration.
     pub async fn monitor(
@@ -159,18 +165,14 @@ pub mod monitors {
         consumer: Consumer<Temperature, TokioAdapter>,
     ) {
         info!("🌡️  Temperature monitor started");
-        
+
         let Ok(mut reader) = consumer.subscribe() else {
             error!("Failed to subscribe to Temperature buffer");
             return;
         };
-        
+
         while let Ok(temp) = reader.recv().await {
-            info!(
-                "🌡️  Temperature: {} = {:.1}°C",
-                temp.address,
-                temp.celsius
-            );
+            info!("🌡️  Temperature: {} = {:.1}°C", temp.address, temp.celsius);
         }
     }
 }
@@ -182,9 +184,9 @@ pub mod monitors {
 #[cfg(all(not(feature = "std"), feature = "embassy"))]
 pub mod monitors {
     use super::*;
-    use aimdb_embassy_adapter::EmbassyAdapter;
     use aimdb_core::{Consumer, RuntimeContext};
-    
+    use aimdb_embassy_adapter::EmbassyAdapter;
+
     /// Monitor for Temperature changes (Embassy/embedded)
     pub async fn monitor(
         ctx: RuntimeContext<EmbassyAdapter>,
@@ -192,12 +194,12 @@ pub mod monitors {
     ) {
         let log = ctx.log();
         log.info("🌡️  Temperature monitor started - watching KNX bus...\n");
-        
+
         let Ok(mut reader) = consumer.subscribe() else {
             log.error("Failed to subscribe to temperature buffer");
             return;
         };
-        
+
         while let Ok(temp) = reader.recv().await {
             log.info(&format!(
                 "🌡️  KNX temperature: {} = {:.1}°C",
@@ -215,11 +217,11 @@ pub mod monitors {
 #[cfg(all(not(feature = "std"), feature = "embassy"))]
 pub mod knx {
     use super::*;
-    
+
     /// Deserialize Temperature from KNX DPT 9.001 (2-byte float)
-    /// 
+    ///
     /// Decodes the raw KNX telegram bytes using DPT 9.001 format.
-    /// 
+    ///
     /// # Arguments
     /// * `data` - Raw KNX telegram bytes (2 bytes for DPT 9.001)
     /// * `group_address` - KNX group address (e.g., "9/1/0")
@@ -228,13 +230,14 @@ pub mod knx {
         group_address: &str,
     ) -> Result<Temperature, alloc::string::String> {
         use aimdb_knx_connector::dpt::{Dpt9, DptDecode};
-        
+
         let celsius = Dpt9::Temperature.decode(data).unwrap_or(0.0);
-        
+
         let mut address = HeaplessString::<16>::new();
-        address.push_str(group_address)
+        address
+            .push_str(group_address)
             .map_err(|_| alloc::string::String::from("Group address too long"))?;
-        
+
         Ok(Temperature {
             address,
             celsius,

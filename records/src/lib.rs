@@ -49,5 +49,5 @@ pub mod switch;
 pub mod temperature;
 
 // Re-export commonly used types for convenience
-pub use switch::{SwitchState, SwitchControl};
+pub use switch::{SwitchControl, SwitchState};
 pub use temperature::Temperature;

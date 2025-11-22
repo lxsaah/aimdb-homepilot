@@ -18,7 +18,6 @@ use aimdb_embassy_adapter::{
 };
 use aimdb_knx_connector::embassy_client::KnxConnectorBuilder;
 use aimdb_mqtt_connector::embassy_client::MqttConnectorBuilder;
-use records::{SwitchState, SwitchControl, Temperature};
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_net::StackResources;
@@ -26,8 +25,9 @@ use embassy_stm32::eth::{Ethernet, GenericPhy, PacketQueue};
 use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::peripherals::ETH;
 use embassy_stm32::rng::Rng;
-use embassy_stm32::{bind_interrupts, eth, peripherals, rng, Config};
+use embassy_stm32::{Config, bind_interrupts, eth, peripherals, rng};
 use embassy_time::{Duration, Timer};
+use records::{SwitchControl, SwitchState, Temperature};
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -167,7 +167,6 @@ async fn main(spawner: Spawner) {
         info!("   IP address: {}", config.address);
     }
 
-
     // Create AimDB database with Embassy adapter
     let runtime = alloc::sync::Arc::new(EmbassyAdapter::new_with_network(spawner, stack));
 
@@ -212,9 +211,7 @@ async fn main(spawner: Spawner) {
             .tap(records::temperature::monitors::monitor)
             // Subscribe from KNX temperature sensor (group address 9/1/0)
             .link_from("knx://9/1/0")
-            .with_deserializer(|data: &[u8]| {
-                records::temperature::knx::from_knx(data, "9/1/0")
-            })
+            .with_deserializer(|data: &[u8]| records::temperature::knx::from_knx(data, "9/1/0"))
             .finish()
             // Publish to MQTT as JSON
             .link_to(Temperature::MQTT_TOPIC)
@@ -231,9 +228,7 @@ async fn main(spawner: Spawner) {
             .tap(records::switch::monitors::control_monitor)
             // Subscribe from MQTT commands
             .link_from(SwitchControl::MQTT_TOPIC)
-            .with_deserializer(|data: &[u8]| {
-                records::switch::serde::deserialize_control(data)
-            })
+            .with_deserializer(|data: &[u8]| records::switch::serde::deserialize_control(data))
             .finish()
             // Publish to KNX group address 1/0/6 (switch control)
             .link_to("knx://1/0/6")
@@ -246,16 +241,31 @@ async fn main(spawner: Spawner) {
 
     info!("✅ Database configured with KNX and MQTT bridge:");
     info!("   KNX INBOUND (KNX → AimDB → MQTT):");
-    info!("     - knx://1/0/7 → {} (DPT 1.001)", SwitchState::MQTT_TOPIC);
-    info!("     - knx://9/1/0 → {} (DPT 9.001)", Temperature::MQTT_TOPIC);
+    info!(
+        "     - knx://1/0/7 → {} (DPT 1.001)",
+        SwitchState::MQTT_TOPIC
+    );
+    info!(
+        "     - knx://9/1/0 → {} (DPT 9.001)",
+        Temperature::MQTT_TOPIC
+    );
     info!("   MQTT INBOUND (MQTT → AimDB → KNX):");
-    info!("     - {} → knx://1/0/6 (JSON → DPT 1.001)", SwitchControl::MQTT_TOPIC);
+    info!(
+        "     - {} → knx://1/0/6 (JSON → DPT 1.001)",
+        SwitchControl::MQTT_TOPIC
+    );
     info!("   KNX Gateway: {}:{}", KNX_GATEWAY_IP, KNX_GATEWAY_PORT);
     info!("   MQTT Broker: {}:{}", MQTT_BROKER_IP, MQTT_BROKER_PORT);
     info!("");
     info!("💡 MQTT commands:");
-    info!("   Subscribe: mosquitto_sub -h {} -t 'knx/#' -v", MQTT_BROKER_IP);
-    info!("   Control: mosquitto_pub -h {} -t 'knx/lights/control' \\", MQTT_BROKER_IP);
+    info!(
+        "   Subscribe: mosquitto_sub -h {} -t 'knx/#' -v",
+        MQTT_BROKER_IP
+    );
+    info!(
+        "   Control: mosquitto_pub -h {} -t 'knx/lights/control' \\",
+        MQTT_BROKER_IP
+    );
     info!("            -m '{{\"group_address\":\"1/0/6\",\"is_on\":true}}'");
     info!("");
 

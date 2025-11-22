@@ -36,7 +36,7 @@ use aimdb_core::remote::{AimxConfig, SecurityPolicy};
 use aimdb_core::{buffer::BufferCfg, AimDbBuilder};
 use aimdb_mqtt_connector::MqttConnector;
 use aimdb_tokio_adapter::{TokioAdapter, TokioRecordRegistrarExt};
-use records::{SwitchState, SwitchControl, Temperature};
+use records::{SwitchControl, SwitchState, Temperature};
 use std::sync::Arc;
 use tracing::info;
 
@@ -58,14 +58,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Configure remote access for MCP
     let socket_path = "/tmp/console.sock";
-    
+
     // Remove existing socket if present
     let _ = std::fs::remove_file(socket_path);
 
     // Configure security: read-write access for controllable devices
     let mut security_policy = SecurityPolicy::read_write();
     security_policy.allow_write::<SwitchControl>(); // Switch control commands can be sent
-    
+
     let remote_config = AimxConfig::uds_default()
         .socket_path(socket_path)
         .security_policy(security_policy)
@@ -76,11 +76,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("🔒 Security policy: ReadWrite (switches controllable)");
 
     // Initialize MQTT connector for communicating with KNX Gateway
-    let mqtt_broker = std::env::var("MQTT_BROKER").unwrap_or_else(|_| "mqtt://192.168.1.7:1883".to_string());
+    let mqtt_broker =
+        std::env::var("MQTT_BROKER").unwrap_or_else(|_| "mqtt://192.168.1.7:1883".to_string());
     info!("📡 Connecting to MQTT broker: {}", mqtt_broker);
-    
-    let mqtt_connector = MqttConnector::new(&mqtt_broker)
-        .with_client_id("home-automation-console");
+
+    let mqtt_connector = MqttConnector::new(&mqtt_broker).with_client_id("home-automation-console");
 
     // Build database with remote access and MQTT connector
     let mut builder = AimDbBuilder::new()
@@ -98,9 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Subscribe from MQTT topic (published by KNX Gateway)
             .link_from(SwitchState::MQTT_TOPIC)
             .with_config("qos", "1")
-            .with_deserializer(|data: &[u8]| {
-                records::switch::serde::deserialize_state(data)
-            })
+            .with_deserializer(|data: &[u8]| records::switch::serde::deserialize_state(data))
             .finish();
     });
 
@@ -126,23 +124,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Subscribe from MQTT topic (published by KNX Gateway)
             .link_from(Temperature::MQTT_TOPIC)
             .with_config("qos", "1")
-            .with_deserializer(|data: &[u8]| {
-                records::temperature::serde::deserialize(data)
-            })
+            .with_deserializer(|data: &[u8]| records::temperature::serde::deserialize(data))
             .finish();
     });
 
     let _db = builder.build().await?;
 
     info!("✅ Database initialized with KNX device records (via MQTT)");
-    info!("   - SwitchState ← {} (read-only monitoring)", SwitchState::MQTT_TOPIC);
-    info!("   - SwitchControl → {} (controllable via MCP)", SwitchControl::MQTT_TOPIC);
-    info!("   - Temperature ← {} (read-only monitoring)", Temperature::MQTT_TOPIC);
+    info!(
+        "   - SwitchState ← {} (read-only monitoring)",
+        SwitchState::MQTT_TOPIC
+    );
+    info!(
+        "   - SwitchControl → {} (controllable via MCP)",
+        SwitchControl::MQTT_TOPIC
+    );
+    info!(
+        "   - Temperature ← {} (read-only monitoring)",
+        Temperature::MQTT_TOPIC
+    );
     info!("");
     info!("📡 MQTT Topics:");
-    info!("   PUBLISH: {} (switch commands to KNX Gateway)", SwitchControl::MQTT_TOPIC);
-    info!("   SUBSCRIBE: {} (light state from KNX Gateway)", SwitchState::MQTT_TOPIC);
-    info!("   SUBSCRIBE: {} (temperature from KNX Gateway)", Temperature::MQTT_TOPIC);
+    info!(
+        "   PUBLISH: {} (switch commands to KNX Gateway)",
+        SwitchControl::MQTT_TOPIC
+    );
+    info!(
+        "   SUBSCRIBE: {} (light state from KNX Gateway)",
+        SwitchState::MQTT_TOPIC
+    );
+    info!(
+        "   SUBSCRIBE: {} (temperature from KNX Gateway)",
+        Temperature::MQTT_TOPIC
+    );
 
     info!("");
     info!("🎯 Console ready!");
@@ -160,7 +174,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("      - 'Show me recent switch events'");
     info!("");
     info!("   4. Test manually:");
-    info!("      echo '{{\"id\":1,\"method\":\"record.list\"}}' | socat - UNIX-CONNECT:{}", socket_path);
+    info!(
+        "      echo '{{\"id\":1,\"method\":\"record.list\"}}' | socat - UNIX-CONNECT:{}",
+        socket_path
+    );
     info!("");
     info!("🔍 Monitoring:");
     info!("   - KNX bus activity will be logged");

@@ -21,45 +21,57 @@ use alloc::{format, vec::Vec};
 // ============================================================================
 
 /// KNX switch state (DPT 1.001 - boolean on/off)
-/// 
+///
 /// Represents the current state of a KNX switch/actuator.
 /// Published by the gateway when monitoring KNX bus activity.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "std", derive(PartialEq))]
-#[cfg_attr(feature = "std", derive(crate::serde::Serialize, crate::serde::Deserialize))]
-#[cfg_attr(not(feature = "std"), derive(crate::serde::Serialize, crate::serde::Deserialize))]
+#[cfg_attr(
+    feature = "std",
+    derive(crate::serde::Serialize, crate::serde::Deserialize)
+)]
+#[cfg_attr(
+    not(feature = "std"),
+    derive(crate::serde::Serialize, crate::serde::Deserialize)
+)]
 pub struct SwitchState {
     /// KNX group address (e.g., "1/0/7")
     #[cfg(feature = "std")]
     pub address: String,
     #[cfg(not(feature = "std"))]
     pub address: HeaplessString<16>,
-    
+
     /// Switch on/off state
     pub is_on: bool,
-    
+
     /// Timestamp of last update (milliseconds)
     pub timestamp: u64,
 }
 
 /// KNX switch control command (DPT 1.001)
-/// 
+///
 /// Represents a control command to be sent to a KNX switch/actuator.
 /// Consumed by the gateway to control KNX devices.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "std", derive(PartialEq))]
-#[cfg_attr(feature = "std", derive(crate::serde::Serialize, crate::serde::Deserialize))]
-#[cfg_attr(not(feature = "std"), derive(crate::serde::Serialize, crate::serde::Deserialize))]
+#[cfg_attr(
+    feature = "std",
+    derive(crate::serde::Serialize, crate::serde::Deserialize)
+)]
+#[cfg_attr(
+    not(feature = "std"),
+    derive(crate::serde::Serialize, crate::serde::Deserialize)
+)]
 pub struct SwitchControl {
     /// KNX group address to control (e.g., "1/0/6")
     #[cfg(feature = "std")]
     pub address: String,
     #[cfg(not(feature = "std"))]
     pub address: HeaplessString<16>,
-    
+
     /// Desired on/off state
     pub is_on: bool,
-    
+
     /// Command timestamp (milliseconds)
     pub timestamp: u64,
 }
@@ -109,30 +121,28 @@ impl SwitchControl {
 #[cfg(feature = "std")]
 pub mod serde {
     use super::*;
-    
+
     /// Serialize SwitchState to JSON
     pub fn serialize_state(state: &SwitchState) -> Result<Vec<u8>, serde_json::Error> {
         serde_json::to_vec(state)
     }
-    
+
     /// Deserialize SwitchState from JSON
     pub fn deserialize_state(data: &[u8]) -> Result<SwitchState, String> {
         serde_json::from_slice(data)
             .map_err(|e| format!("Failed to deserialize SwitchState: {}", e))
     }
-    
+
     /// Serialize SwitchControl to JSON
     pub fn serialize_control(control: &SwitchControl) -> Result<Vec<u8>, serde_json::Error> {
         serde_json::to_vec(control)
     }
-    
+
     /// Deserialize SwitchControl from JSON
     pub fn deserialize_control(data: &[u8]) -> Result<SwitchControl, String> {
         serde_json::from_slice(data)
             .map_err(|e| format!("Failed to deserialize SwitchControl: {}", e))
     }
-    
-
 }
 
 // ============================================================================
@@ -142,7 +152,7 @@ pub mod serde {
 #[cfg(not(feature = "std"))]
 pub mod serde {
     use super::*;
-    
+
     /// Serialize SwitchState to JSON (manual formatting)
     pub fn serialize_state(state: &SwitchState) -> Result<Vec<u8>, alloc::string::String> {
         let json = format!(
@@ -153,16 +163,16 @@ pub mod serde {
         );
         Ok(json.into_bytes())
     }
-    
+
     /// Deserialize SwitchState from JSON (manual parsing)
     pub fn deserialize_state(data: &[u8]) -> Result<SwitchState, alloc::string::String> {
-        let json_str = core::str::from_utf8(data)
-            .map_err(|_| alloc::string::String::from("Invalid UTF-8"))?;
-        
+        let json_str =
+            core::str::from_utf8(data).map_err(|_| alloc::string::String::from("Invalid UTF-8"))?;
+
         let mut address = HeaplessString::<16>::new();
         let mut is_on = false;
         let mut timestamp = 0u64;
-        
+
         for pair in json_str.trim_matches(|c| c == '{' || c == '}').split(',') {
             let parts: alloc::vec::Vec<&str> = pair.split(':').collect();
             if parts.len() != 2 {
@@ -170,7 +180,7 @@ pub mod serde {
             }
             let key = parts[0].trim().trim_matches('"');
             let value = parts[1].trim();
-            
+
             match key {
                 "address" => {
                     let addr = value.trim_matches('"');
@@ -185,14 +195,14 @@ pub mod serde {
                 _ => {}
             }
         }
-        
+
         Ok(SwitchState {
             address,
             is_on,
             timestamp,
         })
     }
-    
+
     /// Serialize SwitchControl to JSON (manual formatting)
     pub fn serialize_control(control: &SwitchControl) -> Result<Vec<u8>, alloc::string::String> {
         let json = format!(
@@ -203,16 +213,16 @@ pub mod serde {
         );
         Ok(json.into_bytes())
     }
-    
+
     /// Deserialize SwitchControl from JSON (manual parsing)
     pub fn deserialize_control(data: &[u8]) -> Result<SwitchControl, alloc::string::String> {
-        let json_str = core::str::from_utf8(data)
-            .map_err(|_| alloc::string::String::from("Invalid UTF-8"))?;
-        
+        let json_str =
+            core::str::from_utf8(data).map_err(|_| alloc::string::String::from("Invalid UTF-8"))?;
+
         let mut address = HeaplessString::<16>::new();
         let mut is_on = false;
         let mut timestamp = 0u64;
-        
+
         for pair in json_str.trim_matches(|c| c == '{' || c == '}').split(',') {
             let parts: alloc::vec::Vec<&str> = pair.split(':').collect();
             if parts.len() != 2 {
@@ -220,7 +230,7 @@ pub mod serde {
             }
             let key = parts[0].trim().trim_matches('"');
             let value = parts[1].trim();
-            
+
             match key {
                 "address" => {
                     let addr = value.trim_matches('"');
@@ -235,7 +245,7 @@ pub mod serde {
                 _ => {}
             }
         }
-        
+
         Ok(SwitchControl {
             address,
             is_on,
@@ -251,12 +261,12 @@ pub mod serde {
 #[cfg(feature = "std")]
 pub mod monitors {
     use super::*;
-    use tracing::{info, error};
-    use aimdb_tokio_adapter::TokioAdapter;
     use aimdb_core::{Consumer, RuntimeContext};
-    
+    use aimdb_tokio_adapter::TokioAdapter;
+    use tracing::{error, info};
+
     /// Monitor for SwitchState changes
-    /// 
+    ///
     /// Logs all incoming switch state updates to the console.
     /// Can be used as a tap in aimdb configuration.
     pub async fn state_monitor(
@@ -264,12 +274,12 @@ pub mod monitors {
         consumer: Consumer<SwitchState, TokioAdapter>,
     ) {
         info!("💡 Switch state monitor started");
-        
+
         let Ok(mut reader) = consumer.subscribe() else {
             error!("Failed to subscribe to SwitchState buffer");
             return;
         };
-        
+
         while let Ok(state) = reader.recv().await {
             info!(
                 "💡 Switch state: {} = {}",
@@ -278,21 +288,21 @@ pub mod monitors {
             );
         }
     }
-    
+
     /// Monitor for SwitchControl commands
-    /// 
+    ///
     /// Logs all outgoing switch control commands.
     pub async fn control_monitor(
         _ctx: RuntimeContext<TokioAdapter>,
         consumer: Consumer<SwitchControl, TokioAdapter>,
     ) {
         info!("📤 Switch control monitor started");
-        
+
         let Ok(mut reader) = consumer.subscribe() else {
             error!("Failed to subscribe to SwitchControl buffer");
             return;
         };
-        
+
         while let Ok(control) = reader.recv().await {
             info!(
                 "📤 Switch control: {} = {}",
@@ -301,8 +311,6 @@ pub mod monitors {
             );
         }
     }
-    
-
 }
 
 // ============================================================================
@@ -312,9 +320,9 @@ pub mod monitors {
 #[cfg(all(not(feature = "std"), feature = "embassy"))]
 pub mod monitors {
     use super::*;
-    use aimdb_embassy_adapter::EmbassyAdapter;
     use aimdb_core::{Consumer, RuntimeContext};
-    
+    use aimdb_embassy_adapter::EmbassyAdapter;
+
     /// Monitor for SwitchState changes (Embassy/embedded)
     pub async fn state_monitor(
         ctx: RuntimeContext<EmbassyAdapter>,
@@ -322,12 +330,12 @@ pub mod monitors {
     ) {
         let log = ctx.log();
         log.info("💡 Switch state monitor started\n");
-        
+
         let Ok(mut reader) = consumer.subscribe() else {
             log.error("Failed to subscribe to SwitchState buffer");
             return;
         };
-        
+
         while let Ok(state) = reader.recv().await {
             log.info(&format!(
                 "💡 KNX switch: {} = {}",
@@ -336,7 +344,7 @@ pub mod monitors {
             ));
         }
     }
-    
+
     /// Monitor for SwitchControl commands (Embassy/embedded)
     pub async fn control_monitor(
         ctx: RuntimeContext<EmbassyAdapter>,
@@ -344,12 +352,12 @@ pub mod monitors {
     ) {
         let log = ctx.log();
         log.info("📥 MQTT→KNX command monitor started...");
-        
+
         let Ok(mut reader) = consumer.subscribe() else {
             log.error("Failed to subscribe to SwitchControl buffer");
             return;
         };
-        
+
         while let Ok(cmd) = reader.recv().await {
             log.info(&format!(
                 "📥 MQTT command → KNX: {} = {}",
@@ -367,11 +375,11 @@ pub mod monitors {
 #[cfg(all(not(feature = "std"), feature = "embassy"))]
 pub mod knx {
     use super::*;
-    
+
     /// Deserialize SwitchState from KNX DPT 1.001 (boolean)
-    /// 
+    ///
     /// Decodes the raw KNX telegram bytes using DPT 1.001 format.
-    /// 
+    ///
     /// # Arguments
     /// * `data` - Raw KNX telegram bytes (1 byte for DPT 1.001)
     /// * `group_address` - KNX group address (e.g., "1/0/7")
@@ -380,32 +388,34 @@ pub mod knx {
         group_address: &str,
     ) -> Result<SwitchState, alloc::string::String> {
         use aimdb_knx_connector::dpt::{Dpt1, DptDecode};
-        
+
         let is_on = Dpt1::Switch.decode(data).unwrap_or(false);
-        
+
         let mut address = HeaplessString::<16>::new();
-        address.push_str(group_address)
+        address
+            .push_str(group_address)
             .map_err(|_| alloc::string::String::from("Group address too long"))?;
-        
+
         Ok(SwitchState {
             address,
             is_on,
             timestamp: 0,
         })
     }
-    
+
     /// Serialize SwitchControl to KNX DPT 1.001 (boolean)
-    /// 
+    ///
     /// Converts SwitchControl command to KNX bus format using DPT 1.001 encoder.
     pub fn serialize_switch_control_to_knx(
         control: &SwitchControl,
     ) -> Result<alloc::vec::Vec<u8>, alloc::string::String> {
         use aimdb_knx_connector::dpt::{Dpt1, DptEncode};
-        
+
         let mut buf = [0u8; 1];
-        let len = Dpt1::Switch.encode(control.is_on, &mut buf)
+        let len = Dpt1::Switch
+            .encode(control.is_on, &mut buf)
             .map_err(|_| alloc::string::String::from("Failed to encode DPT 1.001"))?;
-        
+
         Ok(buf[..len].to_vec())
     }
 }
