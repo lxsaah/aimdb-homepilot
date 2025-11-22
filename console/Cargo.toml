@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# Records module (shared data types)
+records = { path = "../records", features = ["std"] }
+
 # AimDB core and Tokio adapter
 aimdb-core = { version = "0.2", features = ["std"] }
 aimdb-tokio-adapter = { version = "0.2", features = ["tokio-runtime"] }

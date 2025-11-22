@@ -36,42 +36,9 @@ use aimdb_core::remote::{AimxConfig, SecurityPolicy};
 use aimdb_core::{buffer::BufferCfg, AimDbBuilder};
 use aimdb_mqtt_connector::MqttConnector;
 use aimdb_tokio_adapter::{TokioAdapter, TokioRecordRegistrarExt};
-use serde::{Deserialize, Serialize};
+use records::{SwitchState, SwitchControl, Temperature};
 use std::sync::Arc;
 use tracing::info;
-
-/// KNX light state (DPT 1.001 - boolean on/off)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct LightState {
-    /// Group address (e.g., "1/0/6")
-    address: String,
-    /// Light on/off state
-    is_on: bool,
-    /// Last update timestamp
-    timestamp: u64,
-}
-
-/// KNX switch state (DPT 1.001 - button press)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct SwitchEvent {
-    /// Group address (e.g., "1/0/7")
-    address: String,
-    /// Button pressed (true) or released (false)
-    pressed: bool,
-    /// Event timestamp
-    timestamp: u64,
-}
-
-/// KNX temperature sensor (DPT 9.001 - 2-byte float)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct Temperature {
-    /// Group address (e.g., "9/1/0")
-    address: String,
-    /// Temperature in Celsius
-    celsius: f32,
-    /// Measurement timestamp
-    timestamp: u64,
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -97,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Configure security: read-write access for controllable devices
     let mut security_policy = SecurityPolicy::read_write();
-    security_policy.allow_write::<LightState>(); // Lights can be controlled
+    security_policy.allow_write::<SwitchControl>(); // Switch control commands can be sent
     
     let remote_config = AimxConfig::uds_default()
         .socket_path(socket_path)
@@ -106,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .subscription_queue_size(100);
 
     info!("📡 Remote access socket: {}", socket_path);
-    info!("🔒 Security policy: ReadWrite (lights controllable)");
+    info!("🔒 Security policy: ReadWrite (switches controllable)");
 
     // Initialize MQTT connector for communicating with KNX Gateway
     let mqtt_broker = std::env::var("MQTT_BROKER").unwrap_or_else(|_| "mqtt://192.168.1.7:1883".to_string());
@@ -124,66 +91,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Configure KNX device records (via MQTT communication with KNX Gateway)
     info!("⚙️  Configuring KNX device records...");
 
-    // Living room light (controllable - publish control commands to MQTT)
-    builder.configure::<LightState>(|reg| {
+    // Switch state (read-only - subscribe from MQTT published by KNX Gateway)
+    builder.configure::<SwitchState>(|reg| {
         reg.buffer(BufferCfg::SingleLatest)
             .with_serialization()
-            // Publish light control commands to MQTT (consumed by KNX Gateway)
-            .link_to("mqtt://knx/lights/control")
+            // Subscribe from MQTT topic (published by KNX Gateway)
+            .link_from(SwitchState::MQTT_TOPIC)
             .with_config("qos", "1")
-            .with_config("retain", "false")
-            .with_serializer(|state: &LightState| {
-                // Serialize as JSON for MQTT
-                serde_json::to_vec(state)
-                    .map_err(|_| aimdb_core::connector::SerializeError::InvalidData)
+            .with_deserializer(|data: &[u8]| {
+                records::switch::serde::deserialize_state(data)
             })
             .finish();
     });
 
-    // Wall switch events (read-only - subscribe from MQTT published by KNX Gateway)
-    builder.configure::<SwitchEvent>(|reg| {
+    // Switch control (controllable - publish control commands to MQTT)
+    builder.configure::<SwitchControl>(|reg| {
         reg.buffer(BufferCfg::SpmcRing { capacity: 50 })
             .with_serialization()
-            // Subscribe from MQTT topic (published by KNX Gateway)
-            .link_from("mqtt://knx/lights/state")
+            // Publish switch control commands to MQTT (consumed by KNX Gateway)
+            .link_to(SwitchControl::MQTT_TOPIC)
             .with_config("qos", "1")
-            .with_deserializer(|data: &[u8]| {
-                // Parse JSON from KNX Gateway
-                let json_str = std::str::from_utf8(data)
-                    .map_err(|_| "Invalid UTF-8".to_string())?;
-                
-                // Parse JSON manually: {"group_address":"1/0/7","is_on":true,"timestamp":0}
-                let mut address = String::new();
-                let mut is_on = false;
-                let mut timestamp = 0u64;
-                
-                for pair in json_str.trim_matches(|c| c == '{' || c == '}').split(',') {
-                    let parts: Vec<&str> = pair.split(':').collect();
-                    if parts.len() != 2 {
-                        continue;
-                    }
-                    let key = parts[0].trim().trim_matches('"');
-                    let value = parts[1].trim();
-                    
-                    match key {
-                        "group_address" => {
-                            address = value.trim_matches('"').to_string();
-                        }
-                        "is_on" => {
-                            is_on = value == "true";
-                        }
-                        "timestamp" => {
-                            timestamp = value.parse().unwrap_or(0);
-                        }
-                        _ => {}
-                    }
-                }
-                
-                Ok(SwitchEvent {
-                    address,
-                    pressed: is_on,
-                    timestamp,
-                })
+            .with_config("retain", "false")
+            .with_serializer(|control: &SwitchControl| {
+                records::switch::serde::serialize_control(control)
+                    .map_err(|_| aimdb_core::connector::SerializeError::InvalidData)
             })
             .finish();
     });
@@ -193,45 +124,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         reg.buffer(BufferCfg::SingleLatest)
             .with_serialization()
             // Subscribe from MQTT topic (published by KNX Gateway)
-            .link_from("mqtt://knx/temperature/state")
+            .link_from(Temperature::MQTT_TOPIC)
             .with_config("qos", "1")
             .with_deserializer(|data: &[u8]| {
-                // Parse JSON from KNX Gateway
-                let json_str = std::str::from_utf8(data)
-                    .map_err(|_| "Invalid UTF-8".to_string())?;
-                
-                // Parse JSON manually: {"group_address":"9/1/0","celsius":21.5,"timestamp":0}
-                let mut address = String::new();
-                let mut celsius = 0.0f32;
-                let mut timestamp = 0u64;
-                
-                for pair in json_str.trim_matches(|c| c == '{' || c == '}').split(',') {
-                    let parts: Vec<&str> = pair.split(':').collect();
-                    if parts.len() != 2 {
-                        continue;
-                    }
-                    let key = parts[0].trim().trim_matches('"');
-                    let value = parts[1].trim();
-                    
-                    match key {
-                        "group_address" => {
-                            address = value.trim_matches('"').to_string();
-                        }
-                        "celsius" => {
-                            celsius = value.parse().unwrap_or(0.0);
-                        }
-                        "timestamp" => {
-                            timestamp = value.parse().unwrap_or(0);
-                        }
-                        _ => {}
-                    }
-                }
-                
-                Ok(Temperature {
-                    address,
-                    celsius,
-                    timestamp,
-                })
+                records::temperature::serde::deserialize(data)
             })
             .finish();
     });
@@ -239,14 +135,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _db = builder.build().await?;
 
     info!("✅ Database initialized with KNX device records (via MQTT)");
-    info!("   - LightState → mqtt://knx/lights/control (controllable via MCP)");
-    info!("   - SwitchEvent ← mqtt://knx/lights/state (read-only monitoring)");
-    info!("   - Temperature ← mqtt://knx/temperature/state (read-only monitoring)");
+    info!("   - SwitchState ← {} (read-only monitoring)", SwitchState::MQTT_TOPIC);
+    info!("   - SwitchControl → {} (controllable via MCP)", SwitchControl::MQTT_TOPIC);
+    info!("   - Temperature ← {} (read-only monitoring)", Temperature::MQTT_TOPIC);
     info!("");
     info!("📡 MQTT Topics:");
-    info!("   PUBLISH: mqtt://knx/lights/control (light commands to KNX Gateway)");
-    info!("   SUBSCRIBE: mqtt://knx/lights/state (switch events from KNX Gateway)");
-    info!("   SUBSCRIBE: mqtt://knx/temperature/state (temperature from KNX Gateway)");
+    info!("   PUBLISH: {} (switch commands to KNX Gateway)", SwitchControl::MQTT_TOPIC);
+    info!("   SUBSCRIBE: {} (light state from KNX Gateway)", SwitchState::MQTT_TOPIC);
+    info!("   SUBSCRIBE: {} (temperature from KNX Gateway)", Temperature::MQTT_TOPIC);
 
     info!("");
     info!("🎯 Console ready!");

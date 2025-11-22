@@ -12,13 +12,13 @@
 
 extern crate alloc;
 
-use aimdb_core::{AimDbBuilder, Consumer, RuntimeContext};
+use aimdb_core::AimDbBuilder;
 use aimdb_embassy_adapter::{
     EmbassyAdapter, EmbassyBufferType, EmbassyRecordRegistrarExt, EmbassyRecordRegistrarExtCustom,
 };
-use aimdb_knx_connector::dpt::{Dpt1, Dpt9, DptDecode, DptEncode};
 use aimdb_knx_connector::embassy_client::KnxConnectorBuilder;
 use aimdb_mqtt_connector::embassy_client::MqttConnectorBuilder;
+use records::{SwitchState, SwitchControl, Temperature};
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_net::StackResources;
@@ -28,7 +28,6 @@ use embassy_stm32::peripherals::ETH;
 use embassy_stm32::rng::Rng;
 use embassy_stm32::{bind_interrupts, eth, peripherals, rng, Config};
 use embassy_time::{Duration, Timer};
-use heapless::String as HeaplessString;
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -49,84 +48,6 @@ type Device =
 #[embassy_executor::task]
 async fn net_task(mut runner: embassy_net::Runner<'static, Device>) -> ! {
     runner.run().await
-}
-
-// ============================================================================
-// KNX DATA TYPES
-// ============================================================================
-
-/// Light state from KNX bus (DPT 1.001)
-#[derive(Clone, Debug)]
-struct LightState {
-    group_address: HeaplessString<16>, // "1/0/7"
-    is_on: bool,
-    #[allow(dead_code)]
-    timestamp: u32,
-}
-
-/// Temperature from KNX bus (DPT 9.001)
-#[derive(Clone, Debug)]
-struct Temperature {
-    group_address: HeaplessString<16>, // "9/1/0"
-    celsius: f32,
-    #[allow(dead_code)]
-    timestamp: u32,
-}
-
-/// Light control command to send to KNX bus (DPT 1.001)
-#[derive(Clone, Debug)]
-struct LightControl {
-    #[allow(dead_code)]
-    group_address: HeaplessString<16>, // "1/0/6"
-    is_on: bool,
-    #[allow(dead_code)]
-    timestamp: u32,
-}
-
-/// Consumer that logs incoming KNX light telegrams
-async fn light_monitor(
-    ctx: RuntimeContext<EmbassyAdapter>,
-    consumer: Consumer<LightState, EmbassyAdapter>,
-) {
-    let log = ctx.log();
-
-    log.info("💡 Light monitor started - watching KNX bus...\n");
-
-    let Ok(mut reader) = consumer.subscribe() else {
-        log.error("Failed to subscribe to light state buffer");
-        return;
-    };
-
-    while let Ok(state) = reader.recv().await {
-        log.info(&alloc::format!(
-            "💡 KNX light: {} = {}",
-            state.group_address.as_str(),
-            if state.is_on { "ON ✨" } else { "OFF" }
-        ));
-    }
-}
-
-/// Consumer that logs incoming KNX temperature telegrams
-async fn temperature_monitor(
-    ctx: RuntimeContext<EmbassyAdapter>,
-    consumer: Consumer<Temperature, EmbassyAdapter>,
-) {
-    let log = ctx.log();
-
-    log.info("🌡️  Temperature monitor started - watching KNX bus...\n");
-
-    let Ok(mut reader) = consumer.subscribe() else {
-        log.error("Failed to subscribe to temperature buffer");
-        return;
-    };
-
-    while let Ok(temp) = reader.recv().await {
-        log.info(&alloc::format!(
-            "🌡️  KNX temperature: {} = {:.1}°C",
-            temp.group_address.as_str(),
-            temp.celsius
-        ));
-    }
 }
 
 /// KNX/IP gateway IP address
@@ -266,36 +187,21 @@ async fn main(spawner: Spawner) {
         .with_connector(KnxConnectorBuilder::new(&gateway_url))
         .with_connector(MqttConnectorBuilder::new(&broker_url).with_client_id("knx-gateway-001"));
 
-    // Configure LightState record (inbound: KNX → AimDB, outbound: AimDB → MQTT)
-    builder.configure::<LightState>(|reg| {
+    // Configure SwitchState record (inbound: KNX → AimDB, outbound: AimDB → MQTT)
+    builder.configure::<SwitchState>(|reg| {
         reg.buffer_sized::<8, 2>(EmbassyBufferType::SingleLatest)
-            .tap(light_monitor)
-            // Subscribe from KNX group address 1/0/7 (light switch monitoring)
+            .tap(records::switch::monitors::state_monitor)
+            // Subscribe from KNX group address 1/0/7 (switch monitoring)
             .link_from("knx://1/0/7")
             .with_deserializer(|data: &[u8]| {
-                // Use DPT 1.001 (Switch) to decode boolean value
-                let is_on = Dpt1::Switch.decode(data).unwrap_or(false);
-                let mut group_address = HeaplessString::<16>::new();
-                let _ = group_address.push_str("1/0/7");
-
-                Ok(LightState {
-                    group_address,
-                    is_on,
-                    timestamp: 0,
-                })
+                records::switch::knx::deserialize_switch_state_from_knx(data, "1/0/7")
             })
             .finish()
             // Publish to MQTT as JSON
-            .link_to("mqtt://knx/lights/state")
-            .with_serializer(|state: &LightState| {
-                use alloc::format;
-                let json = format!(
-                    r#"{{"group_address":"{}","is_on":{},"timestamp":{}}}"#,
-                    state.group_address.as_str(),
-                    state.is_on,
-                    state.timestamp
-                );
-                Ok(json.into_bytes())
+            .link_to(SwitchState::MQTT_TOPIC)
+            .with_serializer(|state: &SwitchState| {
+                records::switch::serde::serialize_state(state)
+                    .map_err(|_| aimdb_core::connector::SerializeError::InvalidData)
             })
             .finish();
     });
@@ -303,112 +209,47 @@ async fn main(spawner: Spawner) {
     // Configure Temperature record (inbound: KNX → AimDB, outbound: AimDB → MQTT)
     builder.configure::<Temperature>(|reg| {
         reg.buffer_sized::<8, 2>(EmbassyBufferType::SingleLatest)
-            .tap(temperature_monitor)
+            .tap(records::temperature::monitors::monitor)
             // Subscribe from KNX temperature sensor (group address 9/1/0)
             .link_from("knx://9/1/0")
             .with_deserializer(|data: &[u8]| {
-                // Use DPT 9.001 (Temperature) to decode 2-byte float temperature
-                let celsius = Dpt9::Temperature.decode(data).unwrap_or(0.0);
-                let mut group_address = HeaplessString::<16>::new();
-                let _ = group_address.push_str("9/1/0");
-
-                Ok(Temperature {
-                    group_address,
-                    celsius,
-                    timestamp: 0,
-                })
+                records::temperature::knx::from_knx(data, "9/1/0")
             })
             .finish()
             // Publish to MQTT as JSON
-            .link_to("mqtt://knx/temperature/state")
+            .link_to(Temperature::MQTT_TOPIC)
             .with_serializer(|temp: &Temperature| {
-                use alloc::format;
-                let json = format!(
-                    r#"{{"group_address":"{}","celsius":{:.2},"timestamp":{}}}"#,
-                    temp.group_address.as_str(),
-                    temp.celsius,
-                    temp.timestamp
-                );
-                Ok(json.into_bytes())
+                records::temperature::serde::serialize(temp)
+                    .map_err(|_| aimdb_core::connector::SerializeError::InvalidData)
             })
             .finish();
     });
 
-    // Configure LightControl record (inbound: MQTT → AimDB, outbound: AimDB → KNX)
-    builder.configure::<LightControl>(|reg| {
+    // Configure SwitchControl record (inbound: MQTT → AimDB, outbound: AimDB → KNX)
+    builder.configure::<SwitchControl>(|reg| {
         reg.buffer_sized::<8, 2>(EmbassyBufferType::SingleLatest)
-            .tap(|ctx: RuntimeContext<EmbassyAdapter>, consumer: Consumer<LightControl, EmbassyAdapter>| async move {
-                let log = ctx.log();
-                log.info("📥 MQTT→KNX command monitor started...");
-                
-                let Ok(mut reader) = consumer.subscribe() else {
-                    log.error("Failed to subscribe to LightControl buffer");
-                    return;
-                };
-                
-                while let Ok(cmd) = reader.recv().await {
-                    log.info(&alloc::format!(
-                        "📥 MQTT command → KNX: {} = {}",
-                        cmd.group_address.as_str(),
-                        if cmd.is_on { "ON" } else { "OFF" }
-                    ));
-                }
-            })
+            .tap(records::switch::monitors::control_monitor)
             // Subscribe from MQTT commands
-            .link_from("mqtt://knx/lights/control")
+            .link_from(SwitchControl::MQTT_TOPIC)
             .with_deserializer(|data: &[u8]| {
-                // Parse JSON command: {"group_address":"1/0/6","is_on":true}
-                let text = core::str::from_utf8(data)
-                    .map_err(|_| alloc::string::String::from("Invalid UTF-8"))?;
-                
-                let mut group_address = HeaplessString::<16>::new();
-                let mut is_on = false;
-                
-                // Simple JSON parsing for {"group_address":"xxx","is_on":yyy}
-                for pair in text.trim_matches(|c| c == '{' || c == '}').split(',') {
-                    let parts: alloc::vec::Vec<&str> = pair.split(':').collect();
-                    if parts.len() != 2 {
-                        continue;
-                    }
-                    let key = parts[0].trim().trim_matches('"');
-                    let value = parts[1].trim();
-                    
-                    match key {
-                        "group_address" => {
-                            let addr = value.trim_matches('"');
-                            let _ = group_address.push_str(addr);
-                        }
-                        "is_on" => {
-                            is_on = value == "true";
-                        }
-                        _ => {}
-                    }
-                }
-                
-                Ok(LightControl {
-                    group_address,
-                    is_on,
-                    timestamp: 0,
-                })
+                records::switch::serde::deserialize_control(data)
             })
             .finish()
-            // Publish to KNX group address 1/0/6 (light control)
+            // Publish to KNX group address 1/0/6 (switch control)
             .link_to("knx://1/0/6")
-            .with_serializer(|state: &LightControl| {
-                // Use DPT 1.001 (Switch) to encode boolean value
-                let mut buf = [0u8; 1];
-                let len = Dpt1::Switch.encode(state.is_on, &mut buf).unwrap_or(0);
-                Ok(buf[..len].to_vec())
+            .with_serializer(|control: &SwitchControl| {
+                records::switch::knx::serialize_switch_control_to_knx(control)
+                    .map_err(|_| aimdb_core::connector::SerializeError::InvalidData)
             })
             .finish();
     });
 
     info!("✅ Database configured with KNX and MQTT bridge:");
     info!("   KNX INBOUND (KNX → AimDB → MQTT):");
-    info!("     - knx://1/0/7 → mqtt://knx/lights/state (DPT 1.001)");
-    info!("     - knx://9/1/0 → mqtt://knx/temperature/state (DPT 9.001)");
+    info!("     - knx://1/0/7 → {} (DPT 1.001)", SwitchState::MQTT_TOPIC);
+    info!("     - knx://9/1/0 → {} (DPT 9.001)", Temperature::MQTT_TOPIC);
     info!("   MQTT INBOUND (MQTT → AimDB → KNX):");
-    info!("     - mqtt://knx/lights/control → knx://1/0/6 (JSON → DPT 1.001)");
+    info!("     - {} → knx://1/0/6 (JSON → DPT 1.001)", SwitchControl::MQTT_TOPIC);
     info!("   KNX Gateway: {}:{}", KNX_GATEWAY_IP, KNX_GATEWAY_PORT);
     info!("   MQTT Broker: {}:{}", MQTT_BROKER_IP, MQTT_BROKER_PORT);
     info!("");
